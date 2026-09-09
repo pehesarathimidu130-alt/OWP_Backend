@@ -1,0 +1,158 @@
+# OLEENA WEDDING PLANNER — BACKEND SETUP & DEVELOPMENT GUIDE
+
+Welcome to the backend setup for the Oleena Wedding Planner API (`OWP_Backend`). Follow the instructions below to get your local environment running and start developing your assigned features safely.
+
+---
+
+### Prerequisites (Must Have Installed First)
+
+1. **.NET 8.0 SDK**: Download and install from Microsoft:
+[https://dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0)
+2. **EF Core Global CLI Tool**:
+Open PowerShell or Command Prompt anywhere and run:
+```bash
+dotnet tool install --global dotnet-ef
+
+```
+
+
+*(If already installed, run `dotnet tool update --global dotnet-ef`)*
+
+---
+
+### Step 1: Get the Latest Code
+
+Choose **Track A** if you already have the repo on your machine, or **Track B** if you are starting from scratch.
+
+#### Track A: If You Already Cloned the Repository
+
+If you previously cloned the repository, wipe any local conflicts and get the clean skeleton:
+
+```bash
+# 1. Discard any local unstaged changes or test files
+git stash -u
+
+# 2. Switch to the dev branch
+git checkout dev
+
+# 3. Pull the fresh skeleton
+git pull origin dev
+
+```
+
+#### Track B: If You Haven't Cloned the Repository Yet
+
+Run this to clone directly onto the `dev` branch:
+
+```bash
+# 1. Clone the dev branch
+git clone -b dev https://github.com/praneethnawarathna/OWP_Backend.git
+
+# 2. Enter the repository directory
+cd OWP_Backend
+
+```
+
+---
+
+### Step 2: Restore Dependencies & Build
+
+Navigate to the directory containing `Backend.csproj` (or solution file) and run:
+
+```bash
+# 1. Restore all required NuGet packages (EF Core, Npgsql, JWT, Swagger)
+dotnet restore
+
+# 2. Compile the project
+dotnet build
+
+```
+
+*Verification:* The build should complete with `Build succeeded: 0 Warning(s), 0 Error(s)`.
+
+---
+
+### Step 3: Run and Test Locally
+
+Start the local API development server:
+
+```bash
+dotnet run
+
+```
+
+Once running, open your web browser to:
+
+* **Swagger Documentation:** `http://localhost:5131/swagger` (or `https://localhost:7020/swagger`)
+
+If you see the **Oleena API Swagger UI** page, your local environment, CORS policy, and database bindings are working. Press `Ctrl + C` in the terminal when you want to stop the server.
+
+---
+
+### Step 4: Create Your Feature Branch (BEFORE Writing Code)
+
+**STRICT RULE:** Never write code or commit directly on the `dev` branch. Create your personal feature branch first:
+
+```bash
+# Format: git checkout -b feature/backend-<your-feature-name>
+# Examples:
+git checkout -b feature/backend-admin-management
+git checkout -b feature/backend-vendor-ratings
+git checkout -b feature/backend-system-reports
+
+```
+
+---
+
+### Step 5: Where to Put Your Code
+
+To prevent merge conflicts, place your work only inside your assigned modules:
+
+1. **Database Entities:** Create your model inside `Entities/<YourFeature>.cs` inheriting from `BaseAuditableEntity`.
+2. **Database Context:** In `Data/AppDbContext.cs`, add ONLY your specific `DbSet`:
+```csharp
+public DbSet<YourEntity> YourEntities { get; set; }
+
+```
+
+
+*(Do NOT remove other team members' DbSets or edit the `SaveChanges` timestamp logic).*
+3. **Data Transfer Objects:** Add request/response classes inside `DTOs/<YourFeature>Dtos.cs`.
+4. **Services & Business Logic:**
+* Interface: `Services/I<YourFeature>Service.cs`
+* Implementation: `Services/<YourFeature>Service.cs`
+* In `Program.cs`, append only your service registration:
+```csharp
+builder.Services.AddScoped<I<YourFeature>Service, <YourFeature>Service>();
+
+```
+
+
+
+
+5. **Controllers:** Create `Controllers/<YourFeature>Controller.cs` inheriting from `ControllerBase` with `[Route("api/[controller]")]`.
+
+---
+
+### Step 6: Pushing Your Work & Merging
+
+When your feature is tested and working:
+
+```bash
+# 1. Check which files you touched
+git status
+
+# 2. Stage your specific files (avoid staging files you didn't intentionally change)
+git add Entities/ DTOs/ Services/ Controllers/ Data/AppDbContext.cs Program.cs
+
+# 3. Commit your progress
+git commit -m "feat(<feature>): implement endpoints and services for <feature>"
+
+# 4. Push your branch to GitHub
+git push -u origin feature/backend-<your-feature-name>
+
+```
+
+5. Go to GitHub, click **Compare & pull request**, set **base: `dev**` $\leftarrow$ **compare: `feature/backend-...**`, and submit your PR for review.
+
+---
