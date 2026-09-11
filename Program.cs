@@ -26,6 +26,7 @@ builder.Services.AddProblemDetails();
 
 // Register Application Services
 builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
+builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
