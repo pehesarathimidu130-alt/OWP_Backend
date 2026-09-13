@@ -55,26 +55,44 @@ namespace Backend.Data
                     logger.LogInformation("DbInitializer: Created user superadmin@oleena.com (password: Admin@123)");
                 }
 
-                // 3. Ensure Admin record with PIN exists for superadmin
+                // 3. Ensure Admin record with SecurePinHash exists for superadmin
                 if (adminUser != null)
                 {
+                    var nameParts = (adminUser.FullName ?? "System SuperAdmin").Split(' ', 2);
+                    var fName = nameParts[0];
+                    var lName = nameParts.Length > 1 ? nameParts[1] : "SuperAdmin";
+
                     var adminRecord = await context.Admins.FirstOrDefaultAsync(a => a.UserId == adminUser.UserId);
                     if (adminRecord == null)
                     {
                         context.Admins.Add(new Admin
                         {
                             UserId = adminUser.UserId,
+                            FirstName = fName,
+                            LastName = lName,
+                            Department = "Administration",
                             AccessLevel = "SuperAdmin",
-                            SecurePin = "9999"
+                            SecurePinHash = BCrypt.Net.BCrypt.HashPassword("9999")
                         });
                         await context.SaveChangesAsync();
-                        logger.LogInformation("DbInitializer: Created Admin profile for superadmin with PIN 9999");
+                        logger.LogInformation("DbInitializer: Created Admin profile for superadmin with PIN 9999 hash");
                     }
-                    else if (string.IsNullOrEmpty(adminRecord.SecurePin))
+                    else
                     {
-                        adminRecord.SecurePin = "9999";
-                        await context.SaveChangesAsync();
-                        logger.LogInformation("DbInitializer: Assigned default PIN 9999 to Admin profile");
+                        bool updated = false;
+                        adminRecord.SecurePinHash = BCrypt.Net.BCrypt.HashPassword("9999");
+                        updated = true;
+                        if (string.IsNullOrEmpty(adminRecord.FirstName))
+                        {
+                            adminRecord.FirstName = fName;
+                            adminRecord.LastName = lName;
+                            updated = true;
+                        }
+                        if (updated)
+                        {
+                            await context.SaveChangesAsync();
+                            logger.LogInformation("DbInitializer: Updated Admin profile for superadmin with SecurePinHash");
+                        }
                     }
                 }
 

@@ -3,14 +3,33 @@ using System.ComponentModel.DataAnnotations;
 namespace Backend.DTOs
 {
     /// <summary>
-    /// Request payload for POST /api/admin-management.
-    /// Creates a new Admin user with auto-generated 4-digit secure PIN.
+    /// Request payload for POST /api/admin/administrators.
+    /// Creates a new Admin/SuperAdmin user with auto-generated 4-digit secure PIN.
     /// </summary>
     public class CreateAdminRequestDto
     {
-        [Required(ErrorMessage = "Full name is required.")]
-        [MaxLength(100)]
-        public string FullName { get; set; } = string.Empty;
+        [Required(ErrorMessage = "First name is required.")]
+        [MaxLength(100, ErrorMessage = "First name cannot exceed 100 characters.")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required.")]
+        [MaxLength(100, ErrorMessage = "Last name cannot exceed 100 characters.")]
+        public string LastName { get; set; } = string.Empty;
+
+        // Backward compatibility helper for legacy calls supplying FullName
+        public string FullName
+        {
+            get => $"{FirstName} {LastName}".Trim();
+            set
+            {
+                if (string.IsNullOrWhiteSpace(FirstName) && !string.IsNullOrWhiteSpace(value))
+                {
+                    var parts = value.Trim().Split(' ', 2);
+                    FirstName = parts[0];
+                    LastName = parts.Length > 1 ? parts[1] : string.Empty;
+                }
+            }
+        }
 
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "A valid email address is required.")]
@@ -18,13 +37,127 @@ namespace Backend.DTOs
         public string Email { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Password is required.")]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
+        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
         [MaxLength(128)]
         public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Role / AccessLevel is required.")]
+        public string Role { get; set; } = "Admin"; // "Admin" or "SuperAdmin"
+
+        [MaxLength(100)]
+        public string? Department { get; set; } = "Administration";
+
+        [MaxLength(20)]
+        public string? PhoneNumber { get; set; }
     }
 
     /// <summary>
-    /// Response payload returned when listing or creating admins.
+    /// Response payload returned when creating an admin.
+    /// The raw 4-digit PIN is returned ONLY once upon creation to display to the Super Admin.
+    /// </summary>
+    public class CreateAdminResponseDto
+    {
+        public int AdminId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string GeneratedPin { get; set; } = string.Empty; // One-time display
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Response payload returned when explicitly regenerating an admin's PIN.
+    /// Returns the new PIN once.
+    /// </summary>
+    public class RegeneratePinResponseDto
+    {
+        public int AdminId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string NewGeneratedPin { get; set; } = string.Empty; // One-time display
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// DTO representing an administrator in the management table.
+    /// NO plaintext PIN is returned. Only a masked placeholder and status indicator.
+    /// </summary>
+    public class AdminListItemDto
+    {
+        public int AdminId { get; set; }
+        public int UserId { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string AccessLevel { get; set; } = string.Empty;
+        public string SecurePin { get; set; } = "••••"; // Masked placeholder
+        public bool HasPinConfigured { get; set; } = true;
+        public string Department { get; set; } = "Administration";
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Request payload for PUT /api/admin/administrators/{id}.
+    /// </summary>
+    public class UpdateAdminDto
+    {
+        [Required(ErrorMessage = "First name is required.")]
+        [MaxLength(100)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required.")]
+        [MaxLength(100)]
+        public string LastName { get; set; } = string.Empty;
+
+        [MaxLength(20)]
+        public string? PhoneNumber { get; set; }
+
+        [Required(ErrorMessage = "AccessLevel is required.")]
+        public string AccessLevel { get; set; } = "Admin"; // "Admin" or "SuperAdmin"
+
+        public bool IsActive { get; set; } = true;
+
+        [MaxLength(100)]
+        public string? Department { get; set; } = "Administration";
+
+        public bool RegeneratePin { get; set; } = false;
+    }
+
+    /// <summary>
+    /// Response payload for PUT /api/admin/administrators/{id}.
+    /// </summary>
+    public class UpdateAdminResponseDto
+    {
+        public int AdminId { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string AccessLevel { get; set; } = string.Empty;
+        public string SecurePin { get; set; } = "••••";
+        public string Department { get; set; } = "Administration";
+        public bool IsActive { get; set; }
+        public string? NewPin { get; set; } // Only populated if RegeneratePin was requested
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Stat counters for the Super Admin dashboard cards.
+    /// </summary>
+    public class AdminMetricsDto
+    {
+        public int TotalAdmins { get; set; }
+        public int ActiveAdmins { get; set; }
+        public int SuperAdmins { get; set; }
+    }
+
+    /// <summary>
+    /// Legacy response payload returned when listing or creating admins in /api/admin-management.
     /// </summary>
     public class AdminResponseDto
     {
@@ -33,17 +166,13 @@ namespace Backend.DTOs
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string AccessLevel { get; set; } = string.Empty;
-        public string SecurePin { get; set; } = string.Empty;
+        public string SecurePin { get; set; } = "••••";
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 
     // ── PIN Management DTOs (used by /api/admin/me/pin/verify and /generate) ──
 
-    /// <summary>
-    /// Request for POST /api/admin/me/pin/verify.
-    /// Checks the submitted PIN against the caller's stored PIN.
-    /// </summary>
     public class VerifyPinRequestDto
     {
         [Required(ErrorMessage = "Current PIN is required.")]
@@ -51,10 +180,6 @@ namespace Backend.DTOs
         public string CurrentPin { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Request for POST /api/admin/me/pin/generate.
-    /// Re-confirms identity via the current PIN before issuing a new one.
-    /// </summary>
     public class GeneratePinRequestDto
     {
         [Required(ErrorMessage = "Current PIN is required.")]
@@ -62,12 +187,6 @@ namespace Backend.DTOs
         public string CurrentPin { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Request for POST /api/admin/me/pin/save.
-    /// The user has reviewed the generated PIN and confirmed it.
-    /// CurrentPin is the original PIN the user typed at the start (for final re-verification).
-    /// NewPin is the candidate returned by the generate endpoint.
-    /// </summary>
     public class SavePinRequestDto
     {
         [Required(ErrorMessage = "Current PIN is required.")]
@@ -79,21 +198,12 @@ namespace Backend.DTOs
         public string NewPin { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Response for POST /api/admin/me/pin/generate.
-    /// Returns the candidate PIN in plaintext.
-    /// AlreadyInUse = true means all generated candidates collided — client should retry.
-    /// The PIN is NOT yet saved when this response is returned.
-    /// </summary>
     public class GeneratePinResponseDto
     {
         public string Pin { get; set; } = string.Empty;
         public bool AlreadyInUse { get; set; }
     }
 
-    /// <summary>
-    /// Request for POST /api/admin/me/change-password.
-    /// </summary>
     public class ChangePasswordRequestDto
     {
         [Required(ErrorMessage = "Current password is required.")]
@@ -104,9 +214,6 @@ namespace Backend.DTOs
         public string NewPassword { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Request for PUT /api/admin/me.
-    /// </summary>
     public class UpdateAdminProfileRequestDto
     {
         [Required(ErrorMessage = "Full name is required.")]
@@ -114,4 +221,3 @@ namespace Backend.DTOs
         public string FullName { get; set; } = string.Empty;
     }
 }
-

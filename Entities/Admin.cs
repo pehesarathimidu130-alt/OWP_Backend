@@ -16,10 +16,28 @@ namespace Backend.Entities
         public User? User { get; set; }
 
         [Required]
-        [MaxLength(4)]
-        public string SecurePin { get; set; } = string.Empty; // 4-digit PIN for admin verification
+        [MaxLength(100)]
+        public string FirstName { get; set; } = string.Empty;
 
+        [Required]
+        [MaxLength(100)]
+        public string LastName { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string FullName => $"{FirstName} {LastName}".Trim();
+
+        [MaxLength(20)]
+        public string? PhoneNumber { get; set; }
+
+        [MaxLength(100)]
+        public string Department { get; set; } = "Administration";
+
+        [Required]
         [MaxLength(50)]
-        public string AccessLevel { get; set; } = "Admin"; // SuperAdmin or Admin
+        public string AccessLevel { get; set; } = "Admin"; // "Admin" or "SuperAdmin"
+
+        [Required]
+        [MaxLength(255)]
+        public string SecurePinHash { get; set; } = string.Empty; // BCrypt-hashed 4-digit PIN (No plaintext stored)
     }
 }

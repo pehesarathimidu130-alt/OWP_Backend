@@ -27,7 +27,20 @@ namespace Backend.Data
         {
             base.OnModelCreating(modelBuilder);
             
-            // Place any custom foreign key constraints, indexes, or Fluent API rules here.
+            // Unique index on Users.Email
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            // 1:1 relationship between User and Admin
+            modelBuilder.Entity<Admin>()
+                .HasKey(a => a.AdminId);
+
+            modelBuilder.Entity<Admin>()
+                .HasOne(a => a.User)
+                .WithOne(u => u.Admin)
+                .HasForeignKey<Admin>(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
         public override int SaveChanges()
