@@ -3,6 +3,7 @@ using Backend.DTOs;
 using Backend.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
 
 namespace Backend.Services
 {
@@ -17,9 +18,398 @@ namespace Backend.Services
             _logger = logger;
         }
 
+        // =========================================================================
+        // SUPER ADMIN ADMINISTRATOR CRUD (Consolidated in Admins Table)
+        // =========================================================================
+
         /// <summary>
-        /// Retrieves all admins by joining the Admins and Users tables.
+        /// Queries administrators from the Admins table joined with Users.
+        /// Does NOT expose plaintext PINs or hashes.
         /// </summary>
+        public async Task<List<AdminListItemDto>> GetAdministratorsAsync(string? search = null, string? role = null, string? status = null)
+        {
+            var query = _context.Admins
+                .Include(a => a.User)
+                .AsQueryable();
+
+            // Search filter (name, email, or phone)
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                query = query.Where(a =>
+                    (a.FirstName != null && a.FirstName.ToLower().Contains(term)) ||
+                    (a.LastName != null && a.LastName.ToLower().Contains(term)) ||
+                    (a.PhoneNumber != null && a.PhoneNumber.ToLower().Contains(term)) ||
+                    (a.User != null && (
+                        a.User.FullName.ToLower().Contains(term) ||
+                        a.User.Email.ToLower().Contains(term) ||
+                        (a.User.PhoneNumber != null && a.User.PhoneNumber.ToLower().Contains(term))
+                    ))
+                );
+            }
+
+            // Role filter ("Admin" or "SuperAdmin")
+            if (!string.IsNullOrWhiteSpace(role) && !role.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                var roleTerm = role.Trim().ToLower();
+                if (roleTerm.Contains("super"))
+                {
+                    query = query.Where(a => a.AccessLevel.ToLower() == "superadmin");
+                }
+                else
+                {
+                    query = query.Where(a => a.AccessLevel.ToLower() == "admin");
+                }
+            }
+
+            // Status filter ("Active" or "Inactive")
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                if (status.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(a => a.User != null && a.User.IsActive);
+                }
+                else if (status.Equals("Inactive", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(a => a.User != null && !a.User.IsActive);
+                }
+            }
+
+            var admins = await query
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+
+            return admins.Select(a =>
+            {
+                var resolvedName = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName : (a.User?.FullName ?? "Admin");
+                var nameParts = resolvedName.Split(' ', 2);
+                var fName = !string.IsNullOrWhiteSpace(a.FirstName) ? a.FirstName : nameParts[0];
+                var lName = !string.IsNullOrWhiteSpace(a.LastName) ? a.LastName : (nameParts.Length > 1 ? nameParts[1] : "");
+
+                return new AdminListItemDto
+                {
+                    AdminId = a.AdminId,
+                    UserId = a.UserId,
+                    FirstName = fName,
+                    LastName = lName,
+                    FullName = $"{fName} {lName}".Trim(),
+                    Email = a.User?.Email ?? "Unknown",
+                    PhoneNumber = a.PhoneNumber ?? a.User?.PhoneNumber,
+                    AccessLevel = a.AccessLevel,
+                    SecurePin = "••••", // Strictly masked — no plaintext in DB or response
+                    HasPinConfigured = !string.IsNullOrEmpty(a.SecurePinHash),
+                    Department = a.Department ?? "Administration",
+                    IsActive = a.User?.IsActive ?? true,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                };
+            }).ToList();
+        }
+
+        /// <summary>
+        /// Retrieves a single administrator by AdminId or UserId.
+        /// </summary>
+        public async Task<AdminListItemDto?> GetAdministratorByIdAsync(int id)
+        {
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.AdminId == id || a.UserId == id);
+
+            if (admin == null) return null;
+
+            var resolvedName = !string.IsNullOrWhiteSpace(admin.FullName) ? admin.FullName : (admin.User?.FullName ?? "Admin");
+            var nameParts = resolvedName.Split(' ', 2);
+            var fName = !string.IsNullOrWhiteSpace(admin.FirstName) ? admin.FirstName : nameParts[0];
+            var lName = !string.IsNullOrWhiteSpace(admin.LastName) ? admin.LastName : (nameParts.Length > 1 ? nameParts[1] : "");
+
+            return new AdminListItemDto
+            {
+                AdminId = admin.AdminId,
+                UserId = admin.UserId,
+                FirstName = fName,
+                LastName = lName,
+                FullName = $"{fName} {lName}".Trim(),
+                Email = admin.User?.Email ?? "Unknown",
+                PhoneNumber = admin.PhoneNumber ?? admin.User?.PhoneNumber,
+                AccessLevel = admin.AccessLevel,
+                SecurePin = "••••",
+                HasPinConfigured = !string.IsNullOrEmpty(admin.SecurePinHash),
+                Department = admin.Department ?? "Administration",
+                IsActive = admin.User?.IsActive ?? true,
+                CreatedAt = admin.CreatedAt,
+                UpdatedAt = admin.UpdatedAt
+            };
+        }
+
+        /// <summary>
+        /// Creates a new administrator in Admins & Users with auto-generated 4-digit PIN and BCrypt hashing.
+        /// Returns the raw 4-digit PIN ONLY once in this response.
+        /// </summary>
+        public async Task<CreateAdminResponseDto> CreateAdministratorAsync(CreateAdminRequestDto request)
+        {
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+            // 1. Check for duplicate email
+            var existingUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+
+            if (existingUser != null)
+            {
+                throw new ArgumentException($"A user with email '{request.Email}' already exists.");
+            }
+
+            // 2. Resolve Role
+            var isSuperAdmin = request.Role.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
+                               request.Role.Equals("SUPER_ADMIN", StringComparison.OrdinalIgnoreCase);
+
+            var targetRoleName = isSuperAdmin ? "SUPER_ADMIN" : "ADMIN";
+            var role = await _context.Roles.FirstOrDefaultAsync(r =>
+                r.RoleName == targetRoleName ||
+                r.RoleName == (isSuperAdmin ? "SuperAdmin" : "Admin"));
+
+            if (role == null)
+            {
+                role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "ADMIN" || r.RoleName == "SUPER_ADMIN");
+                if (role == null)
+                    throw new InvalidOperationException("Admin roles not found in the database. Please seed roles first.");
+            }
+
+            // 3. Cryptographically generate a random 4-digit PIN (1000 - 9999)
+            var rawPin = RandomNumberGenerator.GetInt32(1000, 10000).ToString();
+
+            // 4. Hash password and PIN strictly with BCrypt
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            var pinHash = BCrypt.Net.BCrypt.HashPassword(rawPin);
+
+            // 5. Persist User and Admin within a database transaction
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var fullName = $"{request.FirstName} {request.LastName}".Trim();
+                var phoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+                var newUser = new User
+                {
+                    FullName = fullName,
+                    Email = normalizedEmail,
+                    PhoneNumber = phoneNumber,
+                    PasswordHash = passwordHash,
+                    RoleId = role.RoleId,
+                    IsActive = true
+                };
+
+                _context.Users.Add(newUser);
+                await _context.SaveChangesAsync();
+
+                var accessLevel = isSuperAdmin ? "SuperAdmin" : "Admin";
+                var department = string.IsNullOrWhiteSpace(request.Department) ? "Administration" : request.Department.Trim();
+
+                var newAdmin = new Admin
+                {
+                    UserId = newUser.UserId,
+                    FirstName = request.FirstName.Trim(),
+                    LastName = request.LastName.Trim(),
+                    PhoneNumber = phoneNumber,
+                    Department = department,
+                    AccessLevel = accessLevel,
+                    SecurePinHash = pinHash // ONLY hashed PIN is saved in DB
+                };
+
+                _context.Admins.Add(newAdmin);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation(
+                    "AdminManagement: Created new {AccessLevel} '{FullName}' ({Email}) with AdminId {AdminId}. Stored BCrypt SecurePinHash.",
+                    accessLevel, fullName, newUser.Email, newAdmin.AdminId);
+
+                return new CreateAdminResponseDto
+                {
+                    AdminId = newAdmin.AdminId,
+                    FullName = fullName,
+                    Email = newUser.Email,
+                    Role = accessLevel,
+                    PhoneNumber = newAdmin.PhoneNumber,
+                    GeneratedPin = rawPin, // Returned ONCE for Super Admin display
+                    CreatedAt = newAdmin.CreatedAt
+                };
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "AdminManagement: Error occurred while creating admin {Email}", request.Email);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Updates an administrator's profile, role, status, and department in Admins table.
+        /// </summary>
+        public async Task<UpdateAdminResponseDto> UpdateAdministratorAsync(int id, UpdateAdminDto request)
+        {
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.AdminId == id || a.UserId == id);
+
+            if (admin == null)
+            {
+                throw new KeyNotFoundException($"Administrator with ID {id} was not found.");
+            }
+
+            var isSuperAdmin = request.AccessLevel.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
+                               request.AccessLevel.Equals("SUPER_ADMIN", StringComparison.OrdinalIgnoreCase);
+            var normalizedAccessLevel = isSuperAdmin ? "SuperAdmin" : "Admin";
+
+            // Update user record
+            var fullName = $"{request.FirstName} {request.LastName}".Trim();
+            var phoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+
+            if (admin.User != null)
+            {
+                admin.User.FullName = fullName;
+                admin.User.PhoneNumber = phoneNumber;
+                admin.User.IsActive = request.IsActive;
+
+                var targetRoleName = isSuperAdmin ? "SUPER_ADMIN" : "ADMIN";
+                var role = await _context.Roles.FirstOrDefaultAsync(r =>
+                    r.RoleName == targetRoleName ||
+                    r.RoleName == normalizedAccessLevel);
+
+                if (role != null)
+                {
+                    admin.User.RoleId = role.RoleId;
+                }
+                admin.User.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Update admin record
+            admin.FirstName = request.FirstName.Trim();
+            admin.LastName = request.LastName.Trim();
+            admin.PhoneNumber = phoneNumber;
+            admin.AccessLevel = normalizedAccessLevel;
+            admin.Department = string.IsNullOrWhiteSpace(request.Department) ? "Administration" : request.Department.Trim();
+            admin.UpdatedAt = DateTime.UtcNow;
+
+            string? newPin = null;
+            if (request.RegeneratePin)
+            {
+                newPin = RandomNumberGenerator.GetInt32(1000, 10000).ToString();
+                admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("AdminManagement: Updated admin {AdminId} ({FullName})", id, fullName);
+
+            return new UpdateAdminResponseDto
+            {
+                AdminId = admin.AdminId,
+                FirstName = admin.FirstName,
+                LastName = admin.LastName,
+                FullName = fullName,
+                Email = admin.User?.Email ?? "",
+                PhoneNumber = admin.PhoneNumber,
+                AccessLevel = normalizedAccessLevel,
+                SecurePin = "••••",
+                Department = admin.Department,
+                IsActive = admin.User?.IsActive ?? request.IsActive,
+                NewPin = newPin,
+                UpdatedAt = admin.UpdatedAt
+            };
+        }
+
+        /// <summary>
+        /// Regenerates an administrator's 4-digit PIN, hashes it with BCrypt, saves to DB,
+        /// and returns the newly generated plaintext PIN once for display.
+        /// </summary>
+        public async Task<RegeneratePinResponseDto> RegeneratePinAsync(int id)
+        {
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.AdminId == id || a.UserId == id);
+
+            if (admin == null)
+            {
+                throw new KeyNotFoundException($"Administrator with ID {id} was not found.");
+            }
+
+            var newPin = RandomNumberGenerator.GetInt32(1000, 10000).ToString();
+            admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
+            admin.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            var fullName = !string.IsNullOrWhiteSpace(admin.FullName)
+                ? admin.FullName
+                : (admin.User?.FullName ?? "Admin");
+
+            _logger.LogInformation("AdminManagement: Regenerated PIN for admin {AdminId} ({FullName}). Stored new SecurePinHash.",
+                id, fullName);
+
+            return new RegeneratePinResponseDto
+            {
+                AdminId = admin.AdminId,
+                FullName = fullName,
+                NewGeneratedPin = newPin, // Returned ONCE for display
+                UpdatedAt = admin.UpdatedAt
+            };
+        }
+
+        /// <summary>
+        /// Permanently hard-deletes an administrator and linked User from PostgreSQL.
+        /// Blocks self-deletion if id equals currentUserId.
+        /// </summary>
+        public async Task<bool> DeleteAdministratorAsync(int id, int currentUserId)
+        {
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.AdminId == id || a.UserId == id);
+
+            if (admin == null)
+            {
+                return false;
+            }
+
+            if (admin.UserId == currentUserId || admin.AdminId == currentUserId)
+            {
+                throw new InvalidOperationException("You cannot delete your own active Super Admin account.");
+            }
+
+            var linkedUser = admin.User;
+            _context.Admins.Remove(admin);
+            if (linkedUser != null)
+            {
+                _context.Users.Remove(linkedUser);
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("AdminManagement: Hard deleted admin {AdminId} (UserId {UserId}) by Super Admin {CallerId}",
+                admin.AdminId, admin.UserId, currentUserId);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Computes metrics { totalAdmins, activeAdmins, superAdmins } from Admins table.
+        /// </summary>
+        public async Task<AdminMetricsDto> GetAdminMetricsAsync()
+        {
+            var total = await _context.Admins.CountAsync();
+            var active = await _context.Admins.CountAsync(a => a.User != null && a.User.IsActive);
+            var supers = await _context.Admins.CountAsync(a => a.AccessLevel.ToLower() == "superadmin");
+
+            return new AdminMetricsDto
+            {
+                TotalAdmins = total,
+                ActiveAdmins = active,
+                SuperAdmins = supers
+            };
+        }
+
+        // =========================================================================
+        // LEGACY & SETTINGS METHODS
+        // =========================================================================
+
         public async Task<List<AdminResponseDto>> GetAllAdminsAsync()
         {
             var admins = await _context.Admins
@@ -31,235 +421,104 @@ namespace Backend.Services
             {
                 AdminId = a.AdminId,
                 UserId = a.UserId,
-                FullName = a.User?.FullName ?? "Unknown",
+                FullName = a.User?.FullName ?? a.FullName,
                 Email = a.User?.Email ?? "Unknown",
                 AccessLevel = a.AccessLevel,
-                SecurePin = a.SecurePin,
+                SecurePin = "••••",
                 IsActive = a.User?.IsActive ?? false,
                 CreatedAt = a.CreatedAt
             }).ToList();
         }
 
-        /// <summary>
-        /// Creates a new admin:
-        /// 1. Validates email is not already taken
-        /// 2. Finds the ADMIN role
-        /// 3. Creates a User record with BCrypt-hashed password
-        /// 4. Creates an Admin record with a random 4-digit PIN
-        /// </summary>
         public async Task<AdminResponseDto> CreateAdminAsync(CreateAdminRequestDto request)
         {
-            // 1. Check for duplicate email
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == request.Email);
-
-            if (existingUser != null)
-            {
-                throw new ArgumentException($"A user with email '{request.Email}' already exists.");
-            }
-
-            // 2. Find the ADMIN role
-            var adminRole = await _context.Roles
-                .FirstOrDefaultAsync(r => r.RoleName == "ADMIN" || r.RoleName == "Admin");
-
-            if (adminRole == null)
-            {
-                throw new InvalidOperationException("ADMIN role not found in the database. Please seed roles first.");
-            }
-
-            // 3. Generate a random 4-digit secure PIN (1000 - 9999)
-            var random = new Random();
-            var securePin = random.Next(1000, 10000).ToString();
-
-            // 4. Create User record
-            var newUser = new User
-            {
-                FullName = request.FullName,
-                Email = request.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                RoleId = adminRole.RoleId,
-                IsActive = true
-            };
-
-            _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
-
-            // 5. Create Admin record linked to the new user
-            var newAdmin = new Admin
-            {
-                UserId = newUser.UserId,
-                AccessLevel = "Admin",
-                SecurePin = securePin
-            };
-
-            _context.Admins.Add(newAdmin);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation(
-                "AdminManagement: Created new admin '{FullName}' ({Email}) with AdminId {AdminId}, PIN {Pin}",
-                newUser.FullName, newUser.Email, newAdmin.AdminId, securePin);
-
+            var res = await CreateAdministratorAsync(request);
             return new AdminResponseDto
             {
-                AdminId = newAdmin.AdminId,
-                UserId = newUser.UserId,
-                FullName = newUser.FullName,
-                Email = newUser.Email,
-                AccessLevel = newAdmin.AccessLevel,
-                SecurePin = securePin,
-                IsActive = newUser.IsActive,
-                CreatedAt = newAdmin.CreatedAt
+                AdminId = res.AdminId,
+                UserId = res.AdminId,
+                FullName = res.FullName,
+                Email = res.Email,
+                AccessLevel = res.Role,
+                SecurePin = res.GeneratedPin,
+                IsActive = true,
+                CreatedAt = res.CreatedAt
             };
         }
 
-        /// <summary>
-        /// Verifies the submitted PIN against the stored plain-text SecurePin for this admin.
-        /// SecurePin is stored as a plain 4-digit string (see Admin.cs) — no hashing is used.
-        /// </summary>
         public async Task<bool> VerifyPinAsync(int userId, string pin)
         {
-            var admin = await _context.Admins
-                .FirstOrDefaultAsync(a => a.UserId == userId);
-
-            if (admin == null)
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId || a.AdminId == userId);
+            if (admin == null || string.IsNullOrEmpty(admin.SecurePinHash))
             {
-                _logger.LogWarning("VerifyPin: no Admin record found for UserId {UserId}", userId);
                 return false;
             }
 
-            // Direct string comparison — SecurePin is stored unhashed (matches AuthService.cs line 92)
-            return admin.SecurePin == pin;
-        }
-
-        /// <summary>
-        /// Generates a unique random 4-digit PIN candidate for the given admin.
-        /// Does NOT save to the database — the caller must call SaveNewPinAsync to commit.
-        /// Returns AlreadyInUse = true if all attempts collide (extremely unlikely).
-        /// </summary>
-        public async Task<GeneratePinResponseDto> GenerateCandidatePinAsync(int userId)
-        {
-            // Verify the admin exists
-            var adminExists = await _context.Admins.AnyAsync(a => a.UserId == userId);
-            if (!adminExists)
-                throw new InvalidOperationException($"Admin record not found for UserId {userId}.");
-
-            // Collect every PIN currently in use across ALL admins
-            var allUsedPins = await _context.Admins
-                .Select(a => a.SecurePin)
-                .ToListAsync();
-
-            var random = new Random();
-            const int maxAttempts = 20;
-
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
-            {
-                // 4-digit PIN in range 1000–9999 (never starts with 0)
-                var candidate = random.Next(1000, 10000).ToString();
-
-                if (allUsedPins.Contains(candidate))
-                    continue; // collision — try again
-
-                _logger.LogInformation(
-                    "GenerateCandidate: unique PIN found for UserId {UserId} on attempt {Attempt}",
-                    userId, attempt + 1);
-
-                // Return the candidate — NOT saved yet
-                return new GeneratePinResponseDto { Pin = candidate, AlreadyInUse = false };
-            }
-
-            // Extremely unlikely — all 20 attempts collided
-            _logger.LogWarning(
-                "GenerateCandidate: all {Max} attempts for UserId {UserId} produced collisions",
-                maxAttempts, userId);
-
-            return new GeneratePinResponseDto { Pin = string.Empty, AlreadyInUse = true };
-        }
-
-        /// <summary>
-        /// Persists a new PIN for the admin after the user confirms it.
-        /// Re-verifies the current PIN before saving to prevent CSRF-style substitution.
-        /// Returns false if currentPin is wrong; throws if the admin record is not found.
-        /// </summary>
-        public async Task<bool> SaveNewPinAsync(int userId, string currentPin, string newPin)
-        {
-            var admin = await _context.Admins
-                .FirstOrDefaultAsync(a => a.UserId == userId);
-
-            if (admin == null)
-                throw new InvalidOperationException($"Admin record not found for UserId {userId}.");
-
-            // Re-confirm the caller's identity with the original PIN they entered at the start
-            if (admin.SecurePin != currentPin)
-            {
-                _logger.LogWarning("SaveNewPin: PIN re-verification failed for UserId {UserId}", userId);
-                return false;
-            }
-
-            admin.SecurePin = newPin;
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation(
-                "SaveNewPin: PIN updated successfully for UserId {UserId}", userId);
-
-            return true;
-        }
-
-        /// <summary>
-        /// Verifies the current password using BCrypt and updates with the new hashed password.
-        /// </summary>
-        public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
-        {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null)
-            {
-                _logger.LogWarning("ChangePassword: user not found for UserId {UserId}", userId);
-                return false;
-            }
-
-            bool isPasswordValid = false;
             try
             {
-                isPasswordValid = BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash);
+                return BCrypt.Net.BCrypt.Verify(pin, admin.SecurePinHash);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ChangePassword: BCrypt verify error for UserId {UserId}", userId);
+                _logger.LogWarning(ex, "VerifyPinAsync: BCrypt verification failed for UserId {UserId}", userId);
                 return false;
             }
+        }
 
-            if (!isPasswordValid)
-            {
-                _logger.LogWarning("ChangePassword: wrong current password for UserId {UserId}", userId);
-                return false;
-            }
+        public async Task<GeneratePinResponseDto> GenerateCandidatePinAsync(int userId)
+        {
+            // Cryptographically generate random candidate 4-digit PIN
+            var candidate = RandomNumberGenerator.GetInt32(1000, 10000).ToString();
+            return await Task.FromResult(new GeneratePinResponseDto { Pin = candidate, AlreadyInUse = false });
+        }
+
+        public async Task<bool> SaveNewPinAsync(int userId, string currentPin, string newPin)
+        {
+            var isCorrect = await VerifyPinAsync(userId, currentPin);
+            if (!isCorrect) return false;
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId || a.AdminId == userId);
+            if (admin == null) return false;
+
+            admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
+            admin.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null) return false;
+
+            if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash)) return false;
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-
-            _logger.LogInformation("ChangePassword: password successfully updated for UserId {UserId}", userId);
             return true;
         }
 
-        /// <summary>
-        /// Updates the full name for the given user.
-        /// </summary>
         public async Task<bool> UpdateProfileAsync(int userId, string fullName)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null)
-            {
-                _logger.LogWarning("UpdateProfile: user not found for UserId {UserId}", userId);
-                return false;
-            }
+            if (user == null) return false;
 
             user.FullName = fullName.Trim();
             user.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
 
-            _logger.LogInformation("UpdateProfile: profile updated for UserId {UserId}", userId);
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId || a.AdminId == userId);
+            if (admin != null)
+            {
+                var parts = fullName.Trim().Split(' ', 2);
+                admin.FirstName = parts[0];
+                admin.LastName = parts.Length > 1 ? parts[1] : "";
+                admin.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
             return true;
         }
     }
 }
-

@@ -29,10 +29,21 @@ namespace Backend.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            
+            // Unique index on Users.Email
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
 
-            modelBuilder.Entity<VendorService>().HasIndex(service => service.VendorId);
-            modelBuilder.Entity<VendorPerformance>().HasIndex(performance => performance.VendorId);
-            modelBuilder.Entity<Notification>().HasIndex(notification => notification.UserId);
+            // 1:1 relationship between User and Admin
+            modelBuilder.Entity<Admin>()
+                .HasKey(a => a.AdminId);
+
+            modelBuilder.Entity<Admin>()
+                .HasOne(a => a.User)
+                .WithOne(u => u.Admin)
+                .HasForeignKey<Admin>(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
         public override int SaveChanges()

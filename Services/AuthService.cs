@@ -81,15 +81,31 @@ namespace Backend.Services
                     throw new ArgumentException("A valid 4-digit admin PIN is required.");
                 }
 
-                // Verify the PIN against the Admins table
+                // Verify the PIN against Admins table SecurePinHash (BCrypt)
                 var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == user.UserId);
-                if (admin == null)
+                if (admin == null || string.IsNullOrEmpty(admin.SecurePinHash))
                 {
-                    _logger.LogWarning("Login failed: no Admin record found for UserId {UserId}", user.UserId);
-                    throw new UnauthorizedAccessException("Admin profile not found.");
+                    _logger.LogWarning("Login failed: no Admin record or SecurePinHash found for UserId {UserId}", user.UserId);
+                    throw new UnauthorizedAccessException("Admin credentials not configured properly.");
                 }
 
-                if (admin.SecurePin != request.Pin)
+                bool isPinValid = false;
+                try
+                {
+                    isPinValid = BCrypt.Net.BCrypt.Verify(request.Pin, admin.SecurePinHash);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AuthService: BCrypt verify error for Admin UserId {UserId}", user.UserId);
+                }
+
+                if (!isPinValid)
+                {
+                    _logger.LogWarning("Login failed: incorrect PIN for Admin UserId {UserId}", user.UserId);
+                    throw new UnauthorizedAccessException("Incorrect admin PIN.");
+                }
+
+                if (!isPinValid)
                 {
                     _logger.LogWarning("Login failed: incorrect PIN for Admin UserId {UserId}", user.UserId);
                     throw new UnauthorizedAccessException("Incorrect admin PIN.");
