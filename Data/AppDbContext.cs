@@ -22,12 +22,17 @@ namespace Backend.Data
         public DbSet<Admin> Admins { get; set; } = null!;
         public DbSet<Vendor> Vendors { get; set; } = null!;
         public DbSet<Customer> Customers { get; set; } = null!;
+        public DbSet<VendorService> VendorServices { get; set; } = null!;
+        public DbSet<VendorPerformance> VendorPerformances { get; set; } = null!;
+        public DbSet<Notification> Notifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            
-            // Place any custom foreign key constraints, indexes, or Fluent API rules here.
+
+            modelBuilder.Entity<VendorService>().HasIndex(service => service.VendorId);
+            modelBuilder.Entity<VendorPerformance>().HasIndex(performance => performance.VendorId);
+            modelBuilder.Entity<Notification>().HasIndex(notification => notification.UserId);
         }
 
         public override int SaveChanges()
