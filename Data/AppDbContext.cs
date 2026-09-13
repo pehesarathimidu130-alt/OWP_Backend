@@ -22,6 +22,9 @@ namespace Backend.Data
         public DbSet<Admin> Admins { get; set; } = null!;
         public DbSet<Vendor> Vendors { get; set; } = null!;
         public DbSet<Customer> Customers { get; set; } = null!;
+        public DbSet<VendorService> VendorServices { get; set; } = null!;
+        public DbSet<VendorPerformance> VendorPerformances { get; set; } = null!;
+        public DbSet<Notification> Notifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
