@@ -27,6 +27,7 @@ builder.Services.AddProblemDetails();
 // Register Application Services
 builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
 builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
+builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -88,7 +89,11 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp",
         policy => policy.WithOrigins(
                         "http://localhost:5173",
+                        "http://127.0.0.1:5173",
                         "http://localhost:5174",
+                        "http://127.0.0.1:5174",
+                        "http://localhost:5175",
+                        "http://127.0.0.1:5175",
                         "http://localhost:3000")
                         .AllowAnyMethod()
                         .AllowAnyHeader());
@@ -107,6 +112,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowReactApp");
 
+app.UseStaticFiles();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

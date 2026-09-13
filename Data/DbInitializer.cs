@@ -98,11 +98,40 @@ namespace Backend.Data
                         UserId = vendorUser.UserId,
                         BusinessName = "Oleena Florals & Decor",
                         ContactNumber = "+94771234567",
-                        Description = "Premium Wedding Floral & Stage Decor"
+                        Description = "Premium Wedding Floral & Stage Decor",
+                        IsApproved = true,
+                        Status = "Approved"
                     });
                     await context.SaveChangesAsync();
                     logger.LogInformation("DbInitializer: Created sample vendor user vendor@oleena.com (password: Vendor@123)");
                 }
+
+                // 5. Seed sample Customer user if not exists
+                var customerRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Customer");
+                var customerUser = await context.Users.FirstOrDefaultAsync(u => u.Email == "customer@oleena.com");
+                if (customerUser == null && customerRole != null)
+                {
+                    customerUser = new User
+                    {
+                        Email = "customer@oleena.com",
+                        FullName = "Sample Customer",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("Customer@123"),
+                        RoleId = customerRole.RoleId,
+                        IsActive = true
+                    };
+                    context.Users.Add(customerUser);
+                    await context.SaveChangesAsync();
+
+                    context.Customers.Add(new Customer
+                    {
+                        UserId = customerUser.UserId,
+                        FirstName = "Sample",
+                        LastName = "Customer"
+                    });
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("DbInitializer: Created sample customer user customer@oleena.com (password: Customer@123)");
+                }
+
             }
             catch (Exception ex)
             {
