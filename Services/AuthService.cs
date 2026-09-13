@@ -104,12 +104,6 @@ namespace Backend.Services
                     _logger.LogWarning("Login failed: incorrect PIN for Admin UserId {UserId}", user.UserId);
                     throw new UnauthorizedAccessException("Incorrect admin PIN.");
                 }
-
-                if (!isPinValid)
-                {
-                    _logger.LogWarning("Login failed: incorrect PIN for Admin UserId {UserId}", user.UserId);
-                    throw new UnauthorizedAccessException("Incorrect admin PIN.");
-                }
             }
             else
             {

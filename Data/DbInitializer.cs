@@ -62,6 +62,7 @@ namespace Backend.Data
                     var fName = nameParts[0];
                     var lName = nameParts.Length > 1 ? nameParts[1] : "SuperAdmin";
 
+                    string initialPin = "1234";
                     var adminRecord = await context.Admins.FirstOrDefaultAsync(a => a.UserId == adminUser.UserId);
                     if (adminRecord == null)
                     {
@@ -72,26 +73,41 @@ namespace Backend.Data
                             LastName = lName,
                             Department = "Administration",
                             AccessLevel = "SuperAdmin",
-                            SecurePinHash = BCrypt.Net.BCrypt.HashPassword("9999")
+                            SecurePinHash = BCrypt.Net.BCrypt.HashPassword(initialPin)
                         });
                         await context.SaveChangesAsync();
-                        logger.LogInformation("DbInitializer: Created Admin profile for superadmin with PIN 9999 hash");
+                        logger.LogInformation("DbInitializer: Created Admin profile for superadmin with initial PIN hash");
                     }
                     else
                     {
+                        // ONLY repair fields that are genuinely missing/invalid.
+                        // NEVER overwrite SecurePinHash or PasswordHash if already present.
                         bool updated = false;
-                        adminRecord.SecurePinHash = BCrypt.Net.BCrypt.HashPassword("9999");
-                        updated = true;
+
+                        // Back-fill SecurePinHash ONLY if it is completely absent
+                        if (string.IsNullOrEmpty(adminRecord.SecurePinHash))
+                        {
+                            adminRecord.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(initialPin);
+                            updated = true;
+                            logger.LogInformation("DbInitializer: SecurePinHash was missing for superadmin — set initial PIN hash.");
+                        }
+
+                        // Back-fill name only if it was never stored
                         if (string.IsNullOrEmpty(adminRecord.FirstName))
                         {
                             adminRecord.FirstName = fName;
                             adminRecord.LastName = lName;
                             updated = true;
                         }
+
                         if (updated)
                         {
                             await context.SaveChangesAsync();
-                            logger.LogInformation("DbInitializer: Updated Admin profile for superadmin with SecurePinHash");
+                            logger.LogInformation("DbInitializer: Back-filled missing fields on Admin profile for superadmin.");
+                        }
+                        else
+                        {
+                            logger.LogInformation("DbInitializer: Admin profile for superadmin is complete — no changes made.");
                         }
                     }
                 }

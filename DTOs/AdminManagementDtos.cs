@@ -47,8 +47,9 @@ namespace Backend.DTOs
         [MaxLength(100)]
         public string? Department { get; set; } = "Administration";
 
-        [MaxLength(20)]
-        public string? PhoneNumber { get; set; }
+        [Required(ErrorMessage = "Phone number is required.")]
+        [RegularExpression(@"^[0-9]{10}$", ErrorMessage = "Phone number must be exactly 10 digits with no spaces or symbols.")]
+        public string PhoneNumber { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -113,8 +114,9 @@ namespace Backend.DTOs
         [MaxLength(100)]
         public string LastName { get; set; } = string.Empty;
 
-        [MaxLength(20)]
-        public string? PhoneNumber { get; set; }
+        [Required(ErrorMessage = "Phone number is required.")]
+        [RegularExpression(@"^[0-9]{10}$", ErrorMessage = "Phone number must be exactly 10 digits with no spaces or symbols.")]
+        public string PhoneNumber { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "AccessLevel is required.")]
         public string AccessLevel { get; set; } = "Admin"; // "Admin" or "SuperAdmin"
