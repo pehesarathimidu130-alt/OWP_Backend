@@ -24,10 +24,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// Register Application Services
-builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
-builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
-
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings.GetValue<string>("SecretKey") ?? "PlaceholderSecretKeyForDevelopmentNeedsToBeLongerThan32Chars!";
@@ -86,10 +82,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
-        policy => policy.WithOrigins(
-                        "http://localhost:5173",
-                        "http://localhost:5174",
-                        "http://localhost:3000")
+        policy => policy.WithOrigins("http://localhost:5173", "http://localhost:3000") // Common React/Flutter web ports
                         .AllowAnyMethod()
                         .AllowAnyHeader());
 });
@@ -113,13 +106,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Seed/repair initial authentication data on startup
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DbInitializer.SeedAsync(dbContext, logger);
-}
 
 app.Run();
