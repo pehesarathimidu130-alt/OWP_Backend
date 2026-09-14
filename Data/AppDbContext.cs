@@ -25,8 +25,6 @@ namespace Backend.Data
         public DbSet<VendorService> VendorServices { get; set; } = null!;
         public DbSet<VendorPerformance> VendorPerformances { get; set; } = null!;
         public DbSet<Notification> Notifications { get; set; } = null!;
-        public DbSet<VendorGalleryImage> VendorGalleryImages { get; set; } = null!;
-        public DbSet<VendorDocument> VendorDocuments { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
