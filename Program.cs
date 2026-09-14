@@ -28,6 +28,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
 builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
+builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
