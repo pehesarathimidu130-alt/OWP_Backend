@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916144903_AlignTypesToString")]
+    partial class AlignTypesToString
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -103,36 +106,36 @@ namespace Backend.Migrations
                         {
                             CategoryId = 1,
                             CategoryName = "Hotel / Venue",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7365),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7367)
+                            CreatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2621),
+                            UpdatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2628)
                         },
                         new
                         {
                             CategoryId = 2,
                             CategoryName = "Photography",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7369),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7370)
+                            CreatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2631),
+                            UpdatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2632)
                         },
                         new
                         {
                             CategoryId = 3,
                             CategoryName = "Music",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7371),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7372)
+                            CreatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2634),
+                            UpdatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2635)
                         },
                         new
                         {
                             CategoryId = 4,
                             CategoryName = "Decorations",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7373),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7373)
+                            CreatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2637),
+                            UpdatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2638)
                         },
                         new
                         {
                             CategoryId = 5,
                             CategoryName = "Catering",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7374),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7375)
+                            CreatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2640),
+                            UpdatedAt = new DateTime(2026, 9, 16, 14, 49, 2, 449, DateTimeKind.Utc).AddTicks(2641)
                         });
                 });
 
@@ -1036,10 +1039,6 @@ namespace Backend.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("CoverImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1083,41 +1082,6 @@ namespace Backend.Migrations
                     b.HasIndex("VendorId");
 
                     b.ToTable("VendorServices");
-                });
-
-            modelBuilder.Entity("Backend.Entities.VendorServiceImage", b =>
-                {
-                    b.Property<int>("ImageId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ImageId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsCover")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ImageId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.ToTable("VendorServiceImages");
                 });
 
             modelBuilder.Entity("Backend.Entities.VenueSpace", b =>
@@ -1327,17 +1291,6 @@ namespace Backend.Migrations
                     b.Navigation("Vendor");
                 });
 
-            modelBuilder.Entity("Backend.Entities.VendorServiceImage", b =>
-                {
-                    b.HasOne("Backend.Entities.VendorService", "Service")
-                        .WithMany("Images")
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Service");
-                });
-
             modelBuilder.Entity("Backend.Entities.VenueSpace", b =>
                 {
                     b.HasOne("Backend.Entities.VendorService", "VendorService")
@@ -1368,8 +1321,6 @@ namespace Backend.Migrations
                     b.Navigation("DecorationsDetails");
 
                     b.Navigation("HotelVenueDetails");
-
-                    b.Navigation("Images");
 
                     b.Navigation("MusicDetails");
 

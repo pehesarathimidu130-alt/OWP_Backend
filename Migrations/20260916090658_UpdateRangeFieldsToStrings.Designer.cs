@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916090658_UpdateRangeFieldsToStrings")]
+    partial class UpdateRangeFieldsToStrings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -103,36 +106,36 @@ namespace Backend.Migrations
                         {
                             CategoryId = 1,
                             CategoryName = "Hotel / Venue",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7365),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7367)
+                            CreatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8610),
+                            UpdatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8614)
                         },
                         new
                         {
                             CategoryId = 2,
                             CategoryName = "Photography",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7369),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7370)
+                            CreatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8617),
+                            UpdatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8618)
                         },
                         new
                         {
                             CategoryId = 3,
                             CategoryName = "Music",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7371),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7372)
+                            CreatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8621),
+                            UpdatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8622)
                         },
                         new
                         {
                             CategoryId = 4,
                             CategoryName = "Decorations",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7373),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7373)
+                            CreatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8624),
+                            UpdatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8625)
                         },
                         new
                         {
                             CategoryId = 5,
                             CategoryName = "Catering",
-                            CreatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7374),
-                            UpdatedAt = new DateTime(2026, 9, 17, 6, 8, 11, 830, DateTimeKind.Utc).AddTicks(7375)
+                            CreatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8627),
+                            UpdatedAt = new DateTime(2026, 9, 16, 9, 6, 57, 912, DateTimeKind.Utc).AddTicks(8628)
                         });
                 });
 
@@ -147,8 +150,8 @@ namespace Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CrockeryCutlery")
-                        .HasColumnType("text");
+                    b.Property<bool?>("CrockeryCutlery")
+                        .HasColumnType("boolean");
 
                     b.Property<string[]>("Cuisines")
                         .HasColumnType("text[]");
@@ -171,11 +174,11 @@ namespace Backend.Migrations
                     b.Property<int?>("MinGuests")
                         .HasColumnType("integer");
 
-                    b.Property<string>("OutstationCatering")
-                        .HasColumnType("text");
+                    b.Property<bool?>("OutstationCatering")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("PricePerHead")
-                        .HasColumnType("text");
+                    b.Property<decimal?>("PricePerHead")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("ServiceStyle")
                         .HasColumnType("text");
@@ -263,8 +266,8 @@ namespace Backend.Migrations
                     b.Property<bool?>("LoungePropsAvailable")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("MinimumBudget")
-                        .HasColumnType("text");
+                    b.Property<decimal?>("MinimumBudget")
+                        .HasColumnType("numeric");
 
                     b.Property<bool>("OutstationDecorAllowed")
                         .HasColumnType("boolean");
@@ -281,8 +284,8 @@ namespace Backend.Migrations
                     b.Property<string>("SetupTimeRequired")
                         .HasColumnType("text");
 
-                    b.Property<string>("TablewareLinens")
-                        .HasColumnType("text");
+                    b.Property<bool?>("TablewareLinens")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("TravelFeePolicy")
                         .HasColumnType("text");
@@ -333,8 +336,8 @@ namespace Backend.Migrations
                     b.Property<string>("CeremonyLocation")
                         .HasColumnType("text");
 
-                    b.Property<string>("ComplimentaryBridalSuite")
-                        .HasColumnType("text");
+                    b.Property<bool?>("ComplimentaryBridalSuite")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -348,17 +351,17 @@ namespace Backend.Migrations
                     b.Property<string>("DecorationPolicy")
                         .HasColumnType("text");
 
-                    b.Property<string>("DepositAmount")
-                        .HasColumnType("text");
+                    b.Property<decimal?>("DepositAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<bool?>("DepositRequired")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("DjAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("DjAllowed")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("ExternalPhotographerAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("ExternalPhotographerAllowed")
+                        .HasColumnType("boolean");
 
                     b.Property<bool?>("FloralDecorationAvailable")
                         .HasColumnType("boolean");
@@ -411,11 +414,11 @@ namespace Backend.Migrations
                     b.Property<string>("KitchenFacility")
                         .HasColumnType("text");
 
-                    b.Property<string>("LightingDecoration")
-                        .HasColumnType("text");
+                    b.Property<bool?>("LightingDecoration")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("LiveBandAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("LiveBandAllowed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("MaxMusicEndTime")
                         .HasColumnType("text");
@@ -435,14 +438,14 @@ namespace Backend.Migrations
                     b.Property<string>("OutdoorCeremonyCapacity")
                         .HasColumnType("text");
 
-                    b.Property<string>("OutsideBeveragesAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("OutsideBeveragesAllowed")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("OutsideDecoratorAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("OutsideDecoratorAllowed")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("OutsideFoodAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("OutsideFoodAllowed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("OutsideVendorRestrictions")
                         .HasColumnType("text");
@@ -462,11 +465,11 @@ namespace Backend.Migrations
                     b.Property<bool?>("PlatedDinnerAvailable")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("PreWeddingShootAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("PreWeddingShootAllowed")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("ProjectorScreen")
-                        .HasColumnType("text");
+                    b.Property<bool?>("ProjectorScreen")
+                        .HasColumnType("boolean");
 
                     b.Property<string[]>("RoomTypes")
                         .HasColumnType("text[]");
@@ -477,8 +480,8 @@ namespace Backend.Migrations
                     b.Property<bool?>("StageDecorationAvailable")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("TableDecoration")
-                        .HasColumnType("text");
+                    b.Property<bool?>("TableDecoration")
+                        .HasColumnType("boolean");
 
                     b.Property<bool?>("TraditionalMusicAllowed")
                         .HasColumnType("boolean");
@@ -486,8 +489,8 @@ namespace Backend.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ValetParking")
-                        .HasColumnType("text");
+                    b.Property<bool?>("ValetParking")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("VenueSetting")
                         .HasColumnType("text");
@@ -495,11 +498,11 @@ namespace Backend.Migrations
                     b.Property<string>("VenueType")
                         .HasColumnType("text");
 
-                    b.Property<string>("WheelchairAccessible")
-                        .HasColumnType("text");
+                    b.Property<bool?>("WheelchairAccessible")
+                        .HasColumnType("boolean");
 
-                    b.Property<string>("Wifi")
-                        .HasColumnType("text");
+                    b.Property<bool?>("Wifi")
+                        .HasColumnType("boolean");
 
                     b.HasKey("ServiceId");
 
@@ -520,8 +523,8 @@ namespace Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CustomSongsAllowed")
-                        .HasColumnType("text");
+                    b.Property<bool?>("CustomSongsAllowed")
+                        .HasColumnType("boolean");
 
                     b.Property<string[]>("Genres")
                         .HasColumnType("text[]");
@@ -535,8 +538,8 @@ namespace Backend.Migrations
                     b.Property<bool?>("McServicesIncluded")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("OvertimeRate")
-                        .HasColumnType("text");
+                    b.Property<decimal?>("OvertimeRate")
+                        .HasColumnType("numeric");
 
                     b.Property<string>("PerformanceType")
                         .HasColumnType("text");
@@ -635,8 +638,8 @@ namespace Backend.Migrations
                     b.Property<string>("DeliveryTimeframe")
                         .HasColumnType("text");
 
-                    b.Property<string>("DepositAmount")
-                        .HasColumnType("text");
+                    b.Property<decimal?>("DepositAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<bool>("DepositRequired")
                         .HasColumnType("boolean");
@@ -668,8 +671,8 @@ namespace Backend.Migrations
                     b.Property<string>("ShootingStyle")
                         .HasColumnType("text");
 
-                    b.Property<string>("TravelOutsideColombo")
-                        .HasColumnType("text");
+                    b.Property<bool>("TravelOutsideColombo")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1036,10 +1039,6 @@ namespace Backend.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("CoverImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1083,41 +1082,6 @@ namespace Backend.Migrations
                     b.HasIndex("VendorId");
 
                     b.ToTable("VendorServices");
-                });
-
-            modelBuilder.Entity("Backend.Entities.VendorServiceImage", b =>
-                {
-                    b.Property<int>("ImageId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ImageId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsCover")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ImageId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.ToTable("VendorServiceImages");
                 });
 
             modelBuilder.Entity("Backend.Entities.VenueSpace", b =>
@@ -1327,17 +1291,6 @@ namespace Backend.Migrations
                     b.Navigation("Vendor");
                 });
 
-            modelBuilder.Entity("Backend.Entities.VendorServiceImage", b =>
-                {
-                    b.HasOne("Backend.Entities.VendorService", "Service")
-                        .WithMany("Images")
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Service");
-                });
-
             modelBuilder.Entity("Backend.Entities.VenueSpace", b =>
                 {
                     b.HasOne("Backend.Entities.VendorService", "VendorService")
@@ -1368,8 +1321,6 @@ namespace Backend.Migrations
                     b.Navigation("DecorationsDetails");
 
                     b.Navigation("HotelVenueDetails");
-
-                    b.Navigation("Images");
 
                     b.Navigation("MusicDetails");
 
