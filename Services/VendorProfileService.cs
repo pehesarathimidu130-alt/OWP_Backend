@@ -62,6 +62,15 @@ namespace Backend.Services
                 vendor.SocialLinksJson = JsonSerializer.Serialize(request.SocialLinks, _jsonOptions);
             }
 
+            _context.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                Title = "Business Profile Updated",
+                Message = $"Your business profile for \"{vendor.BusinessName}\" was updated successfully.",
+                Type = "Info",
+                IsRead = false
+            });
+
             await _context.SaveChangesAsync();
             return MapToResponse(vendor);
         }

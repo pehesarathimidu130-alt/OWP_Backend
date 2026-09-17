@@ -88,7 +88,10 @@ namespace Backend.Services
             // Save category detail and venue spaces for the newly created service
             await SaveCategoryDetailsAsync(service, category.CategoryId, request, isNew: true);
 
-            if (string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase))
+            bool isPublished = string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(service.Status, "Active", StringComparison.OrdinalIgnoreCase);
+
+            if (isPublished)
             {
                 _context.Notifications.Add(new Notification
                 {
@@ -96,6 +99,17 @@ namespace Backend.Services
                     Title = "Listing Published",
                     Message = $"Your listing \"{service.ServiceName}\" has been published successfully.",
                     Type = NotificationTypes.ListingPublished,
+                    IsRead = false
+                });
+            }
+            else
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = "Listing Created",
+                    Message = $"Your listing \"{service.ServiceName}\" was created as a draft.",
+                    Type = NotificationTypes.ListingCreated,
                     IsRead = false
                 });
             }
@@ -141,8 +155,12 @@ namespace Backend.Services
             // Enforce single-detail-table rule and update active category details
             await SaveCategoryDetailsAsync(service, category.CategoryId, request, isNew: false);
 
-            if (!string.Equals(previousStatus, "Published", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase))
+            bool wasPublished = string.Equals(previousStatus, "Published", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(previousStatus, "Active", StringComparison.OrdinalIgnoreCase);
+            bool isNowPublished = string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase) ||
+                                  string.Equals(service.Status, "Active", StringComparison.OrdinalIgnoreCase);
+
+            if (!wasPublished && isNowPublished)
             {
                 _context.Notifications.Add(new Notification
                 {
@@ -150,6 +168,17 @@ namespace Backend.Services
                     Title = "Listing Published",
                     Message = $"Your listing \"{service.ServiceName}\" has been published successfully.",
                     Type = NotificationTypes.ListingPublished,
+                    IsRead = false
+                });
+            }
+            else
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = "Listing Updated",
+                    Message = $"Your listing \"{service.ServiceName}\" has been updated successfully.",
+                    Type = NotificationTypes.ListingCreated,
                     IsRead = false
                 });
             }
