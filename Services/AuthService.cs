@@ -115,15 +115,27 @@ namespace Backend.Services
                 }
             }
 
-            // ── 6. Generate JWT token ──
-            var token = GenerateJwtToken(user, roleName);
+            // ── 6. Normalize role name → consistent casing for JWT claims ──
+            // The Roles table may store "ADMIN", "SUPER_ADMIN", etc.
+            // We normalize to title-case so all [Authorize(Roles=...)] checks are consistent.
+            var normalizedRole = roleName.ToUpperInvariant() switch
+            {
+                "SUPER_ADMIN" or "SUPERADMIN" => "SuperAdmin",
+                "ADMIN"                        => "Admin",
+                "VENDOR"                       => "Vendor",
+                "CUSTOMER"                     => "Customer",
+                _                              => roleName   // pass through anything unknown
+            };
 
-            _logger.LogInformation("User {UserId} ({Role}) logged in successfully", user.UserId, roleName);
+            // ── 7. Generate JWT token ──
+            var token = GenerateJwtToken(user, normalizedRole);
+
+            _logger.LogInformation("User {UserId} ({Role}) logged in successfully", user.UserId, normalizedRole);
 
             return new LoginResponseDto
             {
                 Token = token,
-                Role = roleName,
+                Role = normalizedRole,
                 FullName = user.FullName,
                 Email = user.Email,
                 UserId = user.UserId

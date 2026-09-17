@@ -88,5 +88,6 @@ namespace Backend.Entities
 
         public ICollection<VendorGalleryImage> GalleryImages { get; set; } = new List<VendorGalleryImage>();
         public ICollection<VendorDocument> Documents { get; set; } = new List<VendorDocument>();
+        public ICollection<VendorService> VendorServices { get; set; } = new List<VendorService>();
     }
 }
