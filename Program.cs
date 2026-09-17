@@ -96,17 +96,21 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp",
-        policy => policy.WithOrigins(
-                        "http://localhost:5173",
-                        "http://127.0.0.1:5173",
-                        "http://localhost:5174",
-                        "http://127.0.0.1:5174",
-                        "http://localhost:5175",
-                        "http://127.0.0.1:5175",
-                        "http://localhost:3000")
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowReactApp", policy =>
+    {
+        policy.WithOrigins(
+                    "https://owp-frontend.vercel.app",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5174",
+                    "http://127.0.0.1:5174",
+                    "http://localhost:5175",
+                    "http://127.0.0.1:5175",
+                    "http://localhost:3000")
+              .SetIsOriginAllowed(origin => true) // Allows any origin dynamically (including all Vercel domains)
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
 });
 
 var app = builder.Build();
