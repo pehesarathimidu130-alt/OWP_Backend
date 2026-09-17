@@ -60,12 +60,13 @@ namespace Backend.Data
             // Vendor Services & Details Relationships
             // ==========================================================
             
+            var seedDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             modelBuilder.Entity<Category>().HasData(
-                new Category { CategoryId = 1, CategoryName = "Hotel / Venue", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
-                new Category { CategoryId = 2, CategoryName = "Photography", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
-                new Category { CategoryId = 3, CategoryName = "Music", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
-                new Category { CategoryId = 4, CategoryName = "Decorations", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
-                new Category { CategoryId = 5, CategoryName = "Catering", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
+                new Category { CategoryId = 1, CategoryName = "Hotel / Venue", CreatedAt = seedDate, UpdatedAt = seedDate },
+                new Category { CategoryId = 2, CategoryName = "Photography", CreatedAt = seedDate, UpdatedAt = seedDate },
+                new Category { CategoryId = 3, CategoryName = "Music", CreatedAt = seedDate, UpdatedAt = seedDate },
+                new Category { CategoryId = 4, CategoryName = "Decorations", CreatedAt = seedDate, UpdatedAt = seedDate },
+                new Category { CategoryId = 5, CategoryName = "Catering", CreatedAt = seedDate, UpdatedAt = seedDate }
             );
 
             modelBuilder.Entity<VendorService>()

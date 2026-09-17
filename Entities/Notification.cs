@@ -1,9 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Entities
 {
     [Table("Notifications")]
+    [Index(nameof(UserId))]
+    [Index(nameof(UserId), nameof(IsRead))]
     public class Notification : BaseAuditableEntity
     {
         [Key]
