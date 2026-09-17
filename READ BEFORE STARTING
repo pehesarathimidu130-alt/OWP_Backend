@@ -83,7 +83,7 @@ dotnet run
 
 Once running, open your web browser to:
 
-* **Swagger Documentation:** `http://localhost:5131/swagger` (or `https://localhost:7020/swagger`)
+* **Swagger Documentation:** `https://owpbackend-production.up.railway.app/swagger` (or `https://localhost:7020/swagger`)
 
 If you see the **Oleena API Swagger UI** page, your local environment, CORS policy, and database bindings are working. Press `Ctrl + C` in the terminal when you want to stop the server.
 
