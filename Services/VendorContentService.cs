@@ -838,9 +838,13 @@ namespace Backend.Services
                 .ToListAsync();
         }
 
+        private static DateTime? ToUtc(DateTime? dt) =>
+            dt.HasValue ? DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc) : null;
+
         public async Task<VendorPerformanceResponseDto> AddPerformanceAsync(int userId, VendorPerformanceRequestDto request, IFormFile? photo)
         {
             var vendorId = await GetVendorIdAsync(userId);
+            var now = DateTime.UtcNow;
             var performance = new VendorPerformance
             {
                 VendorId = vendorId,
@@ -850,7 +854,9 @@ namespace Backend.Services
                 PhotoUrl = await SavePhotoAsync(photo),
                 CustomerName = request.CustomerName?.Trim(),
                 CustomerFeedback = request.CustomerFeedback?.Trim(),
-                EventDate = request.EventDate
+                EventDate = ToUtc(request.EventDate),
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             _context.VendorPerformances.Add(performance);
@@ -869,7 +875,8 @@ namespace Backend.Services
             performance.Description = request.Description?.Trim();
             performance.CustomerName = request.CustomerName?.Trim();
             performance.CustomerFeedback = request.CustomerFeedback?.Trim();
-            performance.EventDate = request.EventDate;
+            performance.EventDate = ToUtc(request.EventDate);
+            performance.UpdatedAt = DateTime.UtcNow;
             if (photo != null)
             {
                 DeletePhoto(performance.PhotoUrl);
