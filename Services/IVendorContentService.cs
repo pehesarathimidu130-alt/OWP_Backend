@@ -17,6 +17,5 @@ namespace Backend.Services
         Task<VendorPerformanceResponseDto> UpdatePerformanceAsync(int userId, int performanceId, VendorPerformanceRequestDto request, IFormFile? photo);
         Task DeletePerformanceAsync(int userId, int performanceId);
 
-        Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId);
     }
 }

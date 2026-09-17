@@ -172,9 +172,6 @@ namespace Backend.Controllers
             }
         }
 
-        [HttpGet("notifications")]
-        public async Task<IActionResult> GetNotifications() => Ok(await _service.GetNotificationsAsync(GetUserId()));
-
         private int GetUserId()
         {
             var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);

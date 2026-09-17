@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Constants;
 using Backend.Data;
 using Backend.DTOs;
 using Backend.Entities;
@@ -86,6 +87,19 @@ namespace Backend.Services
 
             // Save category detail and venue spaces for the newly created service
             await SaveCategoryDetailsAsync(service, category.CategoryId, request, isNew: true);
+
+            if (string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase))
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = "Listing Published",
+                    Message = $"Your listing \"{service.ServiceName}\" has been published successfully.",
+                    Type = NotificationTypes.ListingPublished,
+                    IsRead = false
+                });
+            }
+
             await _context.SaveChangesAsync();
 
             return await GetServiceByIdAsync(userId, service.ServiceId);
@@ -108,12 +122,15 @@ namespace Backend.Services
 
             var category = await ResolveCategoryAsync(request.CategoryId, request.Category);
 
+            var previousStatus = service.Status;
+            var newStatus = string.IsNullOrWhiteSpace(request.Status) ? "Draft" : request.Status.Trim();
+
             service.ServiceName = request.Title.Trim();
             service.ShortDescription = request.Description?.Trim() ?? string.Empty;
             service.Description = request.FullDescription?.Trim();
             service.Price = request.PriceOnRequest ? null : request.Price;
             service.IsPriceOnRequest = request.PriceOnRequest;
-            service.Status = string.IsNullOrWhiteSpace(request.Status) ? "Draft" : request.Status.Trim();
+            service.Status = newStatus;
             service.CategoryId = category.CategoryId;
             if (request.CoverImageUrl != null)
             {
@@ -123,6 +140,20 @@ namespace Backend.Services
 
             // Enforce single-detail-table rule and update active category details
             await SaveCategoryDetailsAsync(service, category.CategoryId, request, isNew: false);
+
+            if (!string.Equals(previousStatus, "Published", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(service.Status, "Published", StringComparison.OrdinalIgnoreCase))
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = "Listing Published",
+                    Message = $"Your listing \"{service.ServiceName}\" has been published successfully.",
+                    Type = NotificationTypes.ListingPublished,
+                    IsRead = false
+                });
+            }
+
             await _context.SaveChangesAsync();
 
             return await GetServiceByIdAsync(userId, service.ServiceId);
@@ -887,23 +918,6 @@ namespace Backend.Services
             DeletePhoto(performance.PhotoUrl);
             _context.VendorPerformances.Remove(performance);
             await _context.SaveChangesAsync();
-        }
-
-        public async Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId)
-        {
-            return await _context.Notifications
-                .Where(notification => notification.UserId == userId)
-                .OrderByDescending(notification => notification.CreatedAt)
-                .Select(notification => new NotificationResponseDto
-                {
-                    NotificationId = notification.NotificationId,
-                    Title = notification.Title,
-                    Message = notification.Message,
-                    Type = notification.Type,
-                    IsRead = notification.IsRead,
-                    CreatedAt = notification.CreatedAt
-                })
-                .ToListAsync();
         }
 
         private static VendorPerformanceResponseDto MapPerformance(VendorPerformance performance) => new()

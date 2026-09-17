@@ -34,6 +34,7 @@ builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthS
 builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
 builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
+builder.Services.AddScoped<Backend.Services.INotificationService, Backend.Services.NotificationService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
