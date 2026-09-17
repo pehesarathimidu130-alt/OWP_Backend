@@ -19,29 +19,110 @@ namespace Backend.Controllers
         }
 
         [HttpGet("services")]
-        public async Task<IActionResult> GetServices() => Ok(await _service.GetServicesAsync(GetUserId()));
-
-        [HttpPost("services")]
-        public async Task<IActionResult> AddService(VendorServiceRequestDto request)
+        public async Task<IActionResult> GetServices()
         {
             try
             {
-                return Ok(await _service.AddServiceAsync(GetUserId(), request));
+                return Ok(await _service.GetServicesAsync(GetUserId()));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("services/{serviceId:int}")]
+        public async Task<IActionResult> GetService(int serviceId)
+        {
+            try
+            {
+                return Ok(await _service.GetServiceByIdAsync(GetUserId(), serviceId));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("services")]
+        public async Task<IActionResult> AddService([FromBody] VendorServiceRequestDto request)
+        {
+            try
+            {
+                var result = await _service.AddServiceAsync(GetUserId(), request);
+                return CreatedAtAction(nameof(GetService), new { serviceId = result.ServiceId }, result);
             }
             catch (ArgumentException exception)
             {
                 return BadRequest(new { message = exception.Message });
             }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
         }
 
         [HttpPut("services/{serviceId:int}")]
-        public async Task<IActionResult> UpdateService(int serviceId, VendorServiceRequestDto request) => Ok(await _service.UpdateServiceAsync(GetUserId(), serviceId, request));
+        public async Task<IActionResult> UpdateService(int serviceId, [FromBody] VendorServiceRequestDto request)
+        {
+            try
+            {
+                return Ok(await _service.UpdateServiceAsync(GetUserId(), serviceId, request));
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(new { message = exception.Message });
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
+        }
 
         [HttpDelete("services/{serviceId:int}")]
         public async Task<IActionResult> DeleteService(int serviceId)
         {
-            await _service.DeleteServiceAsync(GetUserId(), serviceId);
-            return NoContent();
+            try
+            {
+                await _service.DeleteServiceAsync(GetUserId(), serviceId);
+                return NoContent();
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
+        }
+
+        [HttpPost("services/{serviceId:int}/images")]
+        public async Task<IActionResult> UploadServiceImage(int serviceId, [FromForm] IFormFile file, [FromForm] bool isCover = false)
+        {
+            try
+            {
+                var result = await _service.UploadServiceImageAsync(GetUserId(), serviceId, file, isCover);
+                return Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(new { message = exception.Message });
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
+        }
+
+        [HttpDelete("services/{serviceId:int}/images/{imageId:int}")]
+        public async Task<IActionResult> DeleteServiceImage(int serviceId, int imageId)
+        {
+            try
+            {
+                await _service.DeleteServiceImageAsync(GetUserId(), serviceId, imageId);
+                return NoContent();
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
         }
 
         [HttpGet("performances")]
@@ -61,13 +142,34 @@ namespace Backend.Controllers
         }
 
         [HttpPut("performances/{performanceId:int}")]
-        public async Task<IActionResult> UpdatePerformance(int performanceId, [FromForm] VendorPerformanceRequestDto request, [FromForm] IFormFile? photo) => Ok(await _service.UpdatePerformanceAsync(GetUserId(), performanceId, request, photo));
+        public async Task<IActionResult> UpdatePerformance(int performanceId, [FromForm] VendorPerformanceRequestDto request, [FromForm] IFormFile? photo)
+        {
+            try
+            {
+                return Ok(await _service.UpdatePerformanceAsync(GetUserId(), performanceId, request, photo));
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(new { message = exception.Message });
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
+        }
 
         [HttpDelete("performances/{performanceId:int}")]
         public async Task<IActionResult> DeletePerformance(int performanceId)
         {
-            await _service.DeletePerformanceAsync(GetUserId(), performanceId);
-            return NoContent();
+            try
+            {
+                await _service.DeletePerformanceAsync(GetUserId(), performanceId);
+                return NoContent();
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return NotFound(new { message = exception.Message });
+            }
         }
 
         [HttpGet("notifications")]

@@ -9,10 +9,19 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
+// Allow DateTime with Kind=Unspecified to be written to PostgreSQL timestamp columns.
+// Without this, form-submitted dates (which ASP.NET parses as Unspecified) cause a runtime error.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString;
+    });
 
 // Configure Entity Framework and PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
@@ -28,6 +37,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
 builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
+builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");

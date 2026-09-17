@@ -25,6 +25,17 @@ namespace Backend.Data
         public DbSet<VendorService> VendorServices { get; set; } = null!;
         public DbSet<VendorPerformance> VendorPerformances { get; set; } = null!;
         public DbSet<Notification> Notifications { get; set; } = null!;
+        public DbSet<VendorGalleryImage> VendorGalleryImages { get; set; } = null!;
+        public DbSet<VendorDocument> VendorDocuments { get; set; } = null!;
+        
+        public DbSet<Category> Categories { get; set; } = null!;
+        public DbSet<VenueSpace> VenueSpaces { get; set; } = null!;
+        public DbSet<CateringDetails> CateringDetails { get; set; } = null!;
+        public DbSet<DecorationsDetails> DecorationsDetails { get; set; } = null!;
+        public DbSet<HotelVenueDetails> HotelVenueDetails { get; set; } = null!;
+        public DbSet<MusicDetails> MusicDetails { get; set; } = null!;
+        public DbSet<PhotographyDetails> PhotographyDetails { get; set; } = null!;
+        public DbSet<VendorServiceImage> VendorServiceImages { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -43,6 +54,70 @@ namespace Backend.Data
                 .HasOne(a => a.User)
                 .WithOne(u => u.Admin)
                 .HasForeignKey<Admin>(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ==========================================================
+            // Vendor Services & Details Relationships
+            // ==========================================================
+            
+            modelBuilder.Entity<Category>().HasData(
+                new Category { CategoryId = 1, CategoryName = "Hotel / Venue", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+                new Category { CategoryId = 2, CategoryName = "Photography", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+                new Category { CategoryId = 3, CategoryName = "Music", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+                new Category { CategoryId = 4, CategoryName = "Decorations", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+                new Category { CategoryId = 5, CategoryName = "Catering", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
+            );
+
+            modelBuilder.Entity<VendorService>()
+                .Property(vs => vs.Status)
+                .HasDefaultValue("Draft");
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.Category)
+                .WithMany()
+                .HasForeignKey(vs => vs.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<VendorService>()
+                .HasMany(vs => vs.VenueSpaces)
+                .WithOne(v => v.VendorService)
+                .HasForeignKey(v => v.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasMany(vs => vs.Images)
+                .WithOne(vsi => vsi.Service)
+                .HasForeignKey(vsi => vsi.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.CateringDetails)
+                .WithOne(d => d.VendorService)
+                .HasForeignKey<CateringDetails>(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.DecorationsDetails)
+                .WithOne(d => d.VendorService)
+                .HasForeignKey<DecorationsDetails>(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.HotelVenueDetails)
+                .WithOne(d => d.VendorService)
+                .HasForeignKey<HotelVenueDetails>(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.MusicDetails)
+                .WithOne(d => d.VendorService)
+                .HasForeignKey<MusicDetails>(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorService>()
+                .HasOne(vs => vs.PhotographyDetails)
+                .WithOne(d => d.VendorService)
+                .HasForeignKey<PhotographyDetails>(d => d.ServiceId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
 
