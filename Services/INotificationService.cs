@@ -11,5 +11,6 @@ namespace Backend.Services
         Task MarkAllAsReadAsync(int userId);
         Task<bool> DeleteNotificationAsync(int userId, int notificationId);
         Task<NotificationResponseDto> CreateAsync(int userId, string type, string title, string message);
+        Task CreateForAllAdminsAsync(string type, string title, string message, int? excludeUserId = null);
     }
 }

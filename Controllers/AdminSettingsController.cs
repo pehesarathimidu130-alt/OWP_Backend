@@ -24,13 +24,16 @@ namespace Backend.Controllers
     public class AdminSettingsController : ControllerBase
     {
         private readonly IAdminManagementService _adminService;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<AdminSettingsController> _logger;
 
         public AdminSettingsController(
             IAdminManagementService adminService,
+            INotificationService notificationService,
             ILogger<AdminSettingsController> logger)
         {
             _adminService = adminService;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -166,6 +169,14 @@ namespace Backend.Controllers
             }
 
             _logger.LogInformation("SavePin: PIN saved successfully for UserId {UserId}", userId);
+            
+            await _notificationService.CreateAsync(
+                userId.Value,
+                Backend.Constants.NotificationTypes.SecurityChange,
+                "Security Settings Updated",
+                "Your PIN was changed successfully."
+            );
+            
             return Ok(new { success = true, message = "PIN changed successfully." });
         }
 
@@ -199,6 +210,13 @@ namespace Backend.Controllers
                 );
             }
 
+            await _notificationService.CreateAsync(
+                userId.Value,
+                Backend.Constants.NotificationTypes.SecurityChange,
+                "Security Settings Updated",
+                "Your password was changed successfully."
+            );
+
             return Ok(new { success = true, message = "Password changed successfully." });
         }
 
@@ -231,6 +249,13 @@ namespace Backend.Controllers
                     title: "Update Profile Failed"
                 );
             }
+
+            await _notificationService.CreateAsync(
+                userId.Value,
+                Backend.Constants.NotificationTypes.ProfileUpdated,
+                "Profile Updated",
+                "Your admin profile information has been successfully updated."
+            );
 
             return Ok(new { success = true, message = "Profile updated successfully." });
         }
