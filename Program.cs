@@ -39,6 +39,8 @@ builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Ser
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
 builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
 builder.Services.AddScoped<Backend.Services.INotificationService, Backend.Services.NotificationService>();
+builder.Services.AddScoped<Backend.Services.IVendorRegistrationService, Backend.Services.VendorRegistrationService>();
+builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Services.GoogleTokenVerifier>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
