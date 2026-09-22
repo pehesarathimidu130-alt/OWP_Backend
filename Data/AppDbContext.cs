@@ -36,6 +36,7 @@ namespace Backend.Data
         public DbSet<MusicDetails> MusicDetails { get; set; } = null!;
         public DbSet<PhotographyDetails> PhotographyDetails { get; set; } = null!;
         public DbSet<VendorServiceImage> VendorServiceImages { get; set; } = null!;
+        public DbSet<UserExternalLogin> UserExternalLogins { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -120,6 +121,12 @@ namespace Backend.Data
                 .WithOne(d => d.VendorService)
                 .HasForeignKey<PhotographyDetails>(d => d.ServiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        }
+
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            base.ConfigureConventions(configurationBuilder);
+            configurationBuilder.Properties<DateTime>().HaveColumnType("timestamp with time zone");
         }
 
         public override int SaveChanges()
