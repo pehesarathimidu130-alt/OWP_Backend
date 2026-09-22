@@ -10,7 +10,8 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 
 // Allow DateTime with Kind=Unspecified to be written to PostgreSQL timestamp columns.
-// Without this, form-submitted dates (which ASP.NET parses as Unspecified) cause a runtime error.
+// Without this, form-submitted dates (which ASP.NET parses as Unspecified)  cause a runtime error.
+// .
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
