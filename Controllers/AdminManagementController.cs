@@ -8,7 +8,7 @@ namespace Backend.Controllers
 {
     [ApiController]
     [Route("api/admin-management")]
-    [Authorize(Roles = "SUPER_ADMIN,ADMIN,Admin")]
+    [Authorize(Roles = "SUPER_ADMIN,ADMIN,Admin,SuperAdmin")]
     public class AdminManagementController : ControllerBase
     {
         private readonly IAdminManagementService _adminService;
