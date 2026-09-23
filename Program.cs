@@ -42,6 +42,7 @@ builder.Services.AddScoped<Backend.Services.INotificationService, Backend.Servic
 builder.Services.AddScoped<Backend.Services.IVendorRegistrationService, Backend.Services.VendorRegistrationService>();
 builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Services.GoogleTokenVerifier>();
 builder.Services.AddScoped<Backend.Services.IReportAnalyticsService, Backend.Services.ReportAnalyticsService>();
+builder.Services.AddScoped<Backend.Services.ICustomerAuthService, Backend.Services.CustomerAuthService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
