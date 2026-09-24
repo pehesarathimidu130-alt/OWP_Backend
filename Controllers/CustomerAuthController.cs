@@ -19,10 +19,11 @@ namespace Backend.Controllers
         }
 
         /// <summary>
-        /// POST /api/auth/customer/register
+        /// POST /api/auth/customer/register OR /api/auth/register
         /// Registers a new Customer.
         /// </summary>
         [HttpPost("register")]
+        [HttpPost("/api/auth/register")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(CustomerAuthResponseDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
