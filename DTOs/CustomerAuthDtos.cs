@@ -7,8 +7,20 @@ namespace Backend.DTOs
     {
         [Required(ErrorMessage = "Name is required.")]
         [MaxLength(100)]
-        [JsonPropertyName("name")] // maps 'name' from JSON to this property
         public string FullName { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string? NameAlias
+        {
+            get => FullName;
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(FullName))
+                {
+                    FullName = value;
+                }
+            }
+        }
 
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "A valid email address is required.")]
@@ -17,6 +29,19 @@ namespace Backend.DTOs
 
         [MaxLength(20)]
         public string? Phone { get; set; }
+
+        [JsonPropertyName("phoneNumber")]
+        public string? PhoneNumberAlias
+        {
+            get => Phone;
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(Phone))
+                {
+                    Phone = value;
+                }
+            }
+        }
 
         [Required(ErrorMessage = "Password is required.")]
         [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
