@@ -70,4 +70,29 @@ namespace Backend.DTOs
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
     }
+
+    public class CustomerForgotPasswordRequestDto
+    {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "A valid email address is required.")]
+        [MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class CustomerResetPasswordRequestDto
+    {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "A valid email address is required.")]
+        [MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Verification code is required.")]
+        [JsonPropertyName("token")]
+        public string Token { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "New password is required.")]
+        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        [MaxLength(128)]
+        public string NewPassword { get; set; } = string.Empty;
+    }
 }
