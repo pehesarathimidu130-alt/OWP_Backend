@@ -100,5 +100,88 @@ namespace Backend.Controllers
                 );
             }
         }
+
+        /// <summary>
+        /// POST /api/auth/customer/forgot-password OR /api/auth/forgot-password
+        /// Generates a verification code and sends it via email.
+        /// </summary>
+        [HttpPost("forgot-password")]
+        [HttpPost("/api/auth/forgot-password")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> ForgotPassword([FromBody] CustomerForgotPasswordRequestDto request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            try
+            {
+                await _customerAuthService.ForgotPasswordAsync(request);
+                return Ok(new { message = "Verification code has been sent to your email." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning("Forgot password validation failed: {Message}", ex.Message);
+                return Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Account Not Found"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in forgot-password");
+                return Problem(
+                    detail: "An unexpected error occurred while processing your request.",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "Internal Server Error"
+                );
+            }
+        }
+
+        /// <summary>
+        /// POST /api/auth/customer/reset-password OR /api/auth/reset-password
+        /// Validates verification code and sets new customer password.
+        /// </summary>
+        [HttpPost("reset-password")]
+        [HttpPost("/api/auth/reset-password")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ResetPassword([FromBody] CustomerResetPasswordRequestDto request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            try
+            {
+                await _customerAuthService.ResetPasswordAsync(request);
+                return Ok(new { message = "Password has been successfully updated." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning("Reset password failed: {Message}", ex.Message);
+                return Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Reset Failed"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in reset-password");
+                return Problem(
+                    detail: "An unexpected error occurred while resetting your password.",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "Internal Server Error"
+                );
+            }
+        }
     }
 }

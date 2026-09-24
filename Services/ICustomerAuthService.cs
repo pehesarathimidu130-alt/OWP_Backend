@@ -6,5 +6,7 @@ namespace Backend.Services
     {
         Task<CustomerAuthResponseDto> RegisterAsync(CustomerRegisterRequestDto request);
         Task<CustomerAuthResponseDto> LoginAsync(CustomerLoginRequestDto request);
+        Task<bool> ForgotPasswordAsync(CustomerForgotPasswordRequestDto request);
+        Task<bool> ResetPasswordAsync(CustomerResetPasswordRequestDto request);
     }
 }

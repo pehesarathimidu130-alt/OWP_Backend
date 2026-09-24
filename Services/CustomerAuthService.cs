@@ -14,12 +14,16 @@ namespace Backend.Services
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly ILogger<CustomerAuthService> _logger;
+        private readonly IEmailService _emailService;
 
-        public CustomerAuthService(AppDbContext context, IConfiguration configuration, ILogger<CustomerAuthService> logger)
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Code, DateTime ExpiresAt)> _resetTokens = new();
+
+        public CustomerAuthService(AppDbContext context, IConfiguration configuration, ILogger<CustomerAuthService> logger, IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
             _logger = logger;
+            _emailService = emailService;
         }
 
         public async Task<CustomerAuthResponseDto> RegisterAsync(CustomerRegisterRequestDto request)
@@ -185,6 +189,74 @@ namespace Backend.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public async Task<bool> ForgotPasswordAsync(CustomerForgotPasswordRequestDto request)
+        {
+            var email = request.Email.Trim().ToLower();
+
+            // Verify user exists
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (user == null)
+            {
+                _logger.LogWarning("Password reset requested for non-existent email {Email}", email);
+                throw new InvalidOperationException("No registered account found with this email address.");
+            }
+
+            // Generate secure 6-digit verification code
+            var code = Random.Shared.Next(100000, 999999).ToString();
+            _resetTokens[email] = (code, DateTime.UtcNow.AddMinutes(15));
+
+            _logger.LogInformation("Generated password reset code for {Email}", email);
+
+            // Send via EmailService
+            await _emailService.SendPasswordResetEmailAsync(user.Email, code);
+
+            return true;
+        }
+
+        public async Task<bool> ResetPasswordAsync(CustomerResetPasswordRequestDto request)
+        {
+            var email = request.Email.Trim().ToLower();
+            var code = request.Token.Trim();
+
+            // Check if token exists and is valid
+            if (!_resetTokens.TryGetValue(email, out var entry))
+            {
+                _logger.LogWarning("Password reset failed: no active code for {Email}", email);
+                throw new InvalidOperationException("Verification code has expired or was not requested. Please request a new code.");
+            }
+
+            if (entry.ExpiresAt < DateTime.UtcNow)
+            {
+                _resetTokens.TryRemove(email, out _);
+                _logger.LogWarning("Password reset failed: code expired for {Email}", email);
+                throw new InvalidOperationException("Verification code has expired. Please request a new code.");
+            }
+
+            if (entry.Code != code)
+            {
+                _logger.LogWarning("Password reset failed: incorrect code for {Email}", email);
+                throw new InvalidOperationException("Invalid verification code. Please check your email and try again.");
+            }
+
+            // Find user and update password
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (user == null)
+            {
+                throw new InvalidOperationException("User account not found.");
+            }
+
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.PasswordHash = passwordHash;
+            await _context.SaveChangesAsync();
+
+            // Consume token
+            _resetTokens.TryRemove(email, out _);
+
+            _logger.LogInformation("Password successfully reset for UserId {UserId} ({Email})", user.UserId, email);
+
+            return true;
         }
     }
 }
