@@ -23,11 +23,18 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString;
     });
 
-// Configure Entity Framework and PostgreSQL
+// Configure Entity Framework and PostgreSQL (Neon: retries + longer timeouts for cold starts)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? "Host=localhost;Database=oleena;Username=postgres;Password=postgres"; // Placeholder for Neon
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null);
+        npgsql.CommandTimeout(60);
+    }));
 
 // Configure Global Exception Handler
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
