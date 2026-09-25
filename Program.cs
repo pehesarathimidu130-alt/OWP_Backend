@@ -39,12 +39,11 @@ builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Ser
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
 builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
 builder.Services.AddScoped<Backend.Services.INotificationService, Backend.Services.NotificationService>();
-<<<<<<< Updated upstream
 builder.Services.AddScoped<Backend.Services.IVendorRegistrationService, Backend.Services.VendorRegistrationService>();
 builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Services.GoogleTokenVerifier>();
 builder.Services.AddScoped<Backend.Services.IReportAnalyticsService, Backend.Services.ReportAnalyticsService>();
-=======
->>>>>>> Stashed changes
+builder.Services.AddScoped<Backend.Services.ICustomerAuthService, Backend.Services.CustomerAuthService>();
+builder.Services.AddScoped<Backend.Services.IEmailService, Backend.Services.EmailService>();
 builder.Services.AddScoped<Backend.Services.IAnalyticsService, Backend.Services.AnalyticsService>();
 
 // Configure JWT Authentication
@@ -107,13 +106,13 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp", policy =>
     {
         policy.WithOrigins(
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "http://localhost:5174",
-                    "http://127.0.0.1:5174",
-                    "http://localhost:5175",
-                    "http://127.0.0.1:5175",
-                    "http://localhost:3000")
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:5175",
+                "http://127.0.0.1:5175",
+                "http://localhost:3000")
               .SetIsOriginAllowed(origin => true) // Allows any origin dynamically
               .AllowAnyMethod()
               .AllowAnyHeader();

@@ -10,6 +10,26 @@ namespace Backend.Data
         {
             try
             {
+                // Ensure CustomerFavorites table exists
+                try
+                {
+                    await context.Database.ExecuteSqlRawAsync(@"
+                        CREATE TABLE IF NOT EXISTS ""CustomerFavorites"" (
+                            ""FavoriteId"" SERIAL PRIMARY KEY,
+                            ""UserId"" INTEGER NOT NULL REFERENCES ""Users""(""UserId"") ON DELETE CASCADE,
+                            ""CustomerId"" INTEGER NULL REFERENCES ""Customers""(""CustomerId"") ON DELETE CASCADE,
+                            ""ServiceId"" INTEGER NOT NULL REFERENCES ""VendorServices""(""ServiceId"") ON DELETE CASCADE,
+                            ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT ""UQ_CustomerFavorites_User_Service"" UNIQUE (""UserId"", ""ServiceId"")
+                        );
+                    ");
+                }
+                catch (Exception tblEx)
+                {
+                    logger.LogWarning("CustomerFavorites table check note: {Msg}", tblEx.Message);
+                }
+
                 // 1. Ensure essential roles exist
                 var roles = await context.Roles.ToListAsync();
                 if (!roles.Any())

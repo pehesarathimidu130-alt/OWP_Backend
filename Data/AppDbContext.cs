@@ -37,6 +37,7 @@ namespace Backend.Data
         public DbSet<PhotographyDetails> PhotographyDetails { get; set; } = null!;
         public DbSet<VendorServiceImage> VendorServiceImages { get; set; } = null!;
         public DbSet<UserExternalLogin> UserExternalLogins { get; set; } = null!;
+        public DbSet<CustomerFavorite> CustomerFavorites { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -45,6 +46,11 @@ namespace Backend.Data
             // Unique index on Users.Email
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
+                .IsUnique();
+
+            // Unique index on CustomerFavorites (UserId, ServiceId)
+            modelBuilder.Entity<CustomerFavorite>()
+                .HasIndex(cf => new { cf.UserId, cf.ServiceId })
                 .IsUnique();
 
             // 1:1 relationship between User and Admin
