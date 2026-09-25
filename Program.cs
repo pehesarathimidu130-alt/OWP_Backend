@@ -39,9 +39,12 @@ builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Ser
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
 builder.Services.AddScoped<Backend.Services.IVendorProfileService, Backend.Services.VendorProfileService>();
 builder.Services.AddScoped<Backend.Services.INotificationService, Backend.Services.NotificationService>();
+<<<<<<< Updated upstream
 builder.Services.AddScoped<Backend.Services.IVendorRegistrationService, Backend.Services.VendorRegistrationService>();
 builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Services.GoogleTokenVerifier>();
 builder.Services.AddScoped<Backend.Services.IReportAnalyticsService, Backend.Services.ReportAnalyticsService>();
+=======
+>>>>>>> Stashed changes
 builder.Services.AddScoped<Backend.Services.IAnalyticsService, Backend.Services.AnalyticsService>();
 
 // Configure JWT Authentication
