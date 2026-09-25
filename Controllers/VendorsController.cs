@@ -1,8 +1,10 @@
 using Backend.Data;
+using Backend.DTOs;
 using Backend.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Backend.Controllers
 {
@@ -124,17 +126,45 @@ namespace Backend.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        /// <summary>
+        /// GET /api/vendors/{id}
+        /// Public vendor profile for customers: business details, hours, and past performances.
+        /// </summary>
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetVendorById(int id)
         {
-            var vendor = await _context.Vendors
-                .Include(v => v.VendorServices)
-                    .ThenInclude(vs => vs.Category)
-                .FirstOrDefaultAsync(v => v.VendorId == id);
+            try
+            {
+                var vendor = await _context.Vendors
+                    .Include(v => v.GalleryImages)
+                    .Include(v => v.VendorServices)
+                        .ThenInclude(vs => vs.Category)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.VendorId == id);
 
-            if (vendor == null) return NotFound(new { message = "Vendor not found" });
+                if (vendor == null)
+                {
+                    return NotFound(new { message = "Vendor not found" });
+                }
 
-            return Ok(vendor);
+                var performances = await _context.VendorPerformances
+                    .AsNoTracking()
+                    .Where(p => p.VendorId == id)
+                    .OrderByDescending(p => p.EventDate)
+                    .ThenByDescending(p => p.CreatedAt)
+                    .ToListAsync();
+
+                return Ok(MapPublicProfile(vendor, performances));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching public vendor profile {VendorId}", id);
+                return Problem(
+                    detail: "An error occurred while fetching the vendor profile.",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "Internal Server Error"
+                );
+            }
         }
 
         private static string GetCategoryIcon(string? category)
@@ -148,6 +178,114 @@ namespace Backend.Controllers
             if (cat.Contains("decor") || cat.Contains("flower")) return "local_florist";
             if (cat.Contains("attire") || cat.Contains("dress")) return "checkroom";
             return "stars";
+        }
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        private static PublicVendorProfileDto MapPublicProfile(Vendor vendor, List<VendorPerformance> performances)
+        {
+            var hours = new List<BusinessHoursItemDto>();
+            if (!string.IsNullOrWhiteSpace(vendor.BusinessHoursJson))
+            {
+                try
+                {
+                    hours = JsonSerializer.Deserialize<List<BusinessHoursItemDto>>(vendor.BusinessHoursJson, JsonOptions)
+                            ?? new List<BusinessHoursItemDto>();
+                }
+                catch
+                {
+                    hours = new List<BusinessHoursItemDto>();
+                }
+            }
+
+            var socials = new SocialLinksDto();
+            if (!string.IsNullOrWhiteSpace(vendor.SocialLinksJson))
+            {
+                try
+                {
+                    socials = JsonSerializer.Deserialize<SocialLinksDto>(vendor.SocialLinksJson, JsonOptions)
+                              ?? new SocialLinksDto();
+                }
+                catch
+                {
+                    socials = new SocialLinksDto();
+                }
+            }
+
+            var location = string.Join(", ", new[] { vendor.City, vendor.State, vendor.Country }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
+            if (string.IsNullOrWhiteSpace(location))
+            {
+                location = vendor.Address ?? "Sri Lanka";
+            }
+
+            return new PublicVendorProfileDto
+            {
+                VendorId = vendor.VendorId,
+                BusinessName = vendor.BusinessName,
+                Category = vendor.Category,
+                Tagline = vendor.Tagline,
+                Description = vendor.Description,
+                OwnerName = vendor.OwnerName,
+                ContactNumber = vendor.ContactNumber,
+                AltPhoneNumber = vendor.AltPhoneNumber,
+                Email = vendor.Email,
+                WebsiteUrl = vendor.WebsiteUrl,
+                Address = vendor.Address,
+                City = vendor.City,
+                State = vendor.State,
+                PostalCode = vendor.PostalCode,
+                Country = vendor.Country,
+                ServiceAreas = vendor.ServiceAreas,
+                TravelPolicy = vendor.TravelPolicy,
+                YearsInBusiness = vendor.YearsInBusiness,
+                IsApproved = vendor.IsApproved,
+                LogoUrl = vendor.LogoUrl,
+                CoverImageUrl = vendor.CoverImageUrl,
+                Location = location,
+                ReviewCount = performances.Count(p => !string.IsNullOrWhiteSpace(p.CustomerFeedback)),
+                BusinessHours = hours,
+                SocialLinks = socials,
+                GalleryImages = vendor.GalleryImages
+                    .OrderBy(g => g.DisplayOrder)
+                    .Select(g => new VendorGalleryImageDto
+                    {
+                        ImageId = g.ImageId,
+                        ImageUrl = g.ImageUrl,
+                        Caption = g.Caption,
+                        Category = g.Category,
+                        DisplayOrder = g.DisplayOrder,
+                        IsFeatured = g.IsFeatured
+                    })
+                    .ToList(),
+                Performances = performances.Select(p => new VendorPerformanceResponseDto
+                {
+                    PerformanceId = p.PerformanceId,
+                    Title = p.Title,
+                    Category = p.Category,
+                    Description = p.Description,
+                    PhotoUrl = p.PhotoUrl,
+                    CustomerName = p.CustomerName,
+                    CustomerFeedback = p.CustomerFeedback,
+                    EventDate = p.EventDate
+                }).ToList(),
+                Services = vendor.VendorServices
+                    .OrderByDescending(s => s.CreatedAt)
+                    .Select(s => new PublicVendorServiceItemDto
+                    {
+                        ServiceId = s.ServiceId,
+                        Title = s.ServiceName,
+                        Category = s.Category?.CategoryName ?? vendor.Category,
+                        ShortDescription = s.ShortDescription,
+                        Price = s.Price,
+                        IsPriceOnRequest = s.IsPriceOnRequest,
+                        CoverImageUrl = s.CoverImageUrl
+                    })
+                    .ToList()
+            };
         }
     }
 }
