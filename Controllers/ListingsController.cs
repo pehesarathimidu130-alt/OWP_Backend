@@ -1,14 +1,16 @@
 using Backend.Data;
+using Backend.DTOs;
 using Backend.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace Backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [AllowAnonymous]
     public class ListingsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -25,6 +27,7 @@ namespace Backend.Controllers
         /// Returns all active business services / packages added by vendors with parent vendor info.
         /// </summary>
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetListings(
             [FromQuery] string? category,
             [FromQuery] string? search)
@@ -128,6 +131,7 @@ namespace Backend.Controllers
         /// Returns specific service details with vendor and category data.
         /// </summary>
         [HttpGet("{id:int}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetListingById(int id)
         {
             try
@@ -217,6 +221,164 @@ namespace Backend.Controllers
             if (cat.Contains("decor") || cat.Contains("flower") || cat.Contains("flora")) return "local_florist";
             if (cat.Contains("attire") || cat.Contains("dress")) return "checkroom";
             return "stars";
+        }
+
+        /// <summary>
+        /// POST /api/listings/{vendorServiceId}/record-view
+        /// Logs a view entry for the listing. Allows both anonymous visits and authenticated users.
+        /// </summary>
+        [HttpPost("{vendorServiceId:int}/record-view")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(RecordViewResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> RecordView(
+            [FromRoute] int vendorServiceId,
+            [FromQuery] string? source = null,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RecordViewRequestDto? request = null)
+        {
+            var listing = await _context.VendorServices
+                .FirstOrDefaultAsync(vs => vs.ServiceId == vendorServiceId);
+
+            if (listing == null || string.Equals(listing.Status, "Deleted", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new { message = $"Listing with ID {vendorServiceId} not found or is no longer available." });
+            }
+
+            var userId = GetCurrentUserId();
+            var resolvedSource = !string.IsNullOrWhiteSpace(request?.Source)
+                ? request.Source.Trim()
+                : (!string.IsNullOrWhiteSpace(source) ? source.Trim() : null);
+
+            if (resolvedSource != null && resolvedSource.Length > 30)
+            {
+                resolvedSource = resolvedSource.Substring(0, 30);
+            }
+
+            try
+            {
+                var view = new ListingView
+                {
+                    ServiceId = vendorServiceId,
+                    UserId = userId,
+                    ViewedAt = DateTime.UtcNow,
+                    Source = resolvedSource
+                };
+
+                _context.ListingViews.Add(view);
+                await _context.SaveChangesAsync();
+
+                return Ok(new RecordViewResponseDto(
+                    Success: true,
+                    ListingId: vendorServiceId,
+                    ViewedAt: view.ViewedAt,
+                    IsAnonymous: userId == null,
+                    Message: "Listing view recorded successfully."
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error recording view for service {ServiceId}", vendorServiceId);
+                return Problem(
+                    detail: "An error occurred while recording the listing view.",
+                    statusCode: StatusCodes.Status500InternalServerError
+                );
+            }
+        }
+
+        /// <summary>
+        /// POST /api/listings/{vendorServiceId}/toggle-favorite
+        /// Toggles favorite status for this listing by an authenticated customer.
+        /// </summary>
+        [HttpPost("{vendorServiceId:int}/toggle-favorite")]
+        [Authorize]
+        [ProducesResponseType(typeof(ToggleFavoriteResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> ToggleFavorite([FromRoute] int vendorServiceId)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "Authentication is required to favorite listings." });
+            }
+
+            var listing = await _context.VendorServices
+                .FirstOrDefaultAsync(vs => vs.ServiceId == vendorServiceId);
+
+            if (listing == null || string.Equals(listing.Status, "Deleted", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new { message = $"Listing with ID {vendorServiceId} not found or is no longer available." });
+            }
+
+            try
+            {
+                var existing = await _context.CustomerFavorites
+                    .FirstOrDefaultAsync(cf => cf.UserId == userId.Value && cf.ServiceId == vendorServiceId);
+
+                if (existing != null)
+                {
+                    _context.CustomerFavorites.Remove(existing);
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new ToggleFavoriteResponseDto(
+                        IsFavorite: false,
+                        ListingId: vendorServiceId,
+                        Message: "Listing removed from favorites."
+                    ));
+                }
+                else
+                {
+                    var customer = await _context.Customers
+                        .FirstOrDefaultAsync(c => c.UserId == userId.Value);
+
+                    var newFav = new CustomerFavorite
+                    {
+                        UserId = userId.Value,
+                        CustomerId = customer?.CustomerId,
+                        ServiceId = vendorServiceId
+                    };
+
+                    _context.CustomerFavorites.Add(newFav);
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new ToggleFavoriteResponseDto(
+                        IsFavorite: true,
+                        ListingId: vendorServiceId,
+                        Message: "Listing added to favorites."
+                    ));
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogWarning(ex, "Duplicate favorite or concurrency conflict for user {UserId} and service {ServiceId}", userId, vendorServiceId);
+                return Ok(new ToggleFavoriteResponseDto(
+                    IsFavorite: true,
+                    ListingId: vendorServiceId,
+                    Message: "Listing is already in favorites."
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling favorite for user {UserId} and service {ServiceId}", userId, vendorServiceId);
+                return Problem(
+                    detail: "An error occurred while updating favorites.",
+                    statusCode: StatusCodes.Status500InternalServerError
+                );
+            }
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst("userId")?.Value
+                ?? User.FindFirst("id")?.Value;
+
+            if (int.TryParse(claim, out int userId))
+            {
+                return userId;
+            }
+            return null;
         }
     }
 }
