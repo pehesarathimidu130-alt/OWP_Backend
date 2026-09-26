@@ -26,6 +26,42 @@ namespace Backend.Controllers
         /// GET /api/listings
         /// Returns all active business services / packages added by vendors with parent vendor info.
         /// </summary>
+#if DEBUG
+        [HttpGet("seed-test-data")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SeedTestData()
+        {
+            var vendor = await _context.Vendors.FirstOrDefaultAsync();
+            if (vendor == null) return BadRequest("No vendor found");
+            
+            var decorCat = await _context.Categories.FirstOrDefaultAsync(c => c.CategoryName.Contains("Decor"));
+            if (decorCat == null) { decorCat = new Category { CategoryName = "Decorations" }; _context.Categories.Add(decorCat); }
+            
+            var caterCat = await _context.Categories.FirstOrDefaultAsync(c => c.CategoryName.Contains("Cater"));
+            if (caterCat == null) { caterCat = new Category { CategoryName = "Catering" }; _context.Categories.Add(caterCat); }
+            
+            var decorService = new VendorService { VendorId = vendor.VendorId, Category = decorCat, ServiceName = "Test Decor", ShortDescription = "Test Decor", Status = "Active", DecorationsDetails = new DecorationsDetails { PrimaryStyles = new[] { "Modern" }, FreeConsultation = true } };
+            var caterService = new VendorService { VendorId = vendor.VendorId, Category = caterCat, ServiceName = "Test Cater", ShortDescription = "Test Cater", Status = "Active", CateringDetails = new CateringDetails { Cuisines = new[] { "Italian" }, WaitstaffIncluded = true } };
+            
+            // Also ensure the HotelVenue listing (ID 21) has multiple VenueSpaces
+            var hotel = await _context.VendorServices.Include(s => s.VenueSpaces).FirstOrDefaultAsync(s => s.ServiceId == 21);
+            if (hotel != null)
+            {
+                if (hotel.VenueSpaces == null) hotel.VenueSpaces = new List<VenueSpace>();
+                if (hotel.VenueSpaces.Count < 2)
+                {
+                    hotel.VenueSpaces.Add(new VenueSpace { SpaceName = "Grand Hall", SpaceType = "Indoor", SeatedCapacity = 500 });
+                    hotel.VenueSpaces.Add(new VenueSpace { SpaceName = "Garden", SpaceType = "Outdoor", SeatedCapacity = 200 });
+                }
+            }
+
+            _context.VendorServices.Add(decorService);
+            _context.VendorServices.Add(caterService);
+            await _context.SaveChangesAsync();
+            return Ok("Seeded");
+        }
+#endif
+
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> GetListings(
@@ -194,7 +230,13 @@ namespace Backend.Controllers
                         reviewCount = 18,
                         yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
                         isApproved = vs.Vendor?.IsApproved ?? true
-                    }
+                    },
+                    hotelVenueDetails = vs.HotelVenueDetails != null ? MapHotelVenue(vs.HotelVenueDetails) : null,
+                    photographyDetails = vs.PhotographyDetails != null ? MapPhotography(vs.PhotographyDetails) : null,
+                    decorationsDetails = vs.DecorationsDetails != null ? MapDecorations(vs.DecorationsDetails) : null,
+                    cateringDetails = vs.CateringDetails != null ? MapCatering(vs.CateringDetails) : null,
+                    musicDetails = vs.MusicDetails != null ? MapMusic(vs.MusicDetails) : null,
+                    venueSpaces = vs.VenueSpaces?.Select(MapVenueSpace).ToList()
                 };
 
                 return Ok(result);
@@ -380,5 +422,76 @@ namespace Backend.Controllers
             }
             return null;
         }
+        private static HotelVenueDetailsDto MapHotelVenue(HotelVenueDetails entity) => new()
+        {
+            VenueType = entity.VenueType, VenueSetting = entity.VenueSetting, IndoorOutdoor = entity.IndoorOutdoor,
+            ParkingCapacity = entity.ParkingCapacity, ParkingType = entity.ParkingType, ValetParking = entity.ValetParking,
+            Wifi = entity.Wifi, WheelchairAccessible = entity.WheelchairAccessible, HasAirConditioning = entity.HasAirConditioning,
+            HasBackupGenerator = entity.HasBackupGenerator, HasElevator = entity.HasElevator, HasGuestDropOff = entity.HasGuestDropOff,
+            HasVendorLoadingAccess = entity.HasVendorLoadingAccess, HasCeremony = entity.HasCeremony, CeremonyLocation = entity.CeremonyLocation,
+            OutdoorCeremonyCapacity = entity.OutdoorCeremonyCapacity, SeparateCeremonyReceptionSpaces = entity.SeparateCeremonyReceptionSpaces,
+            HasCatering = entity.HasCatering, CateringProvidedBy = entity.CateringProvidedBy, OutsideFoodAllowed = entity.OutsideFoodAllowed,
+            KitchenFacility = entity.KitchenFacility, CuisineOptions = entity.CuisineOptions, BuffetAvailable = entity.BuffetAvailable,
+            PlatedDinnerAvailable = entity.PlatedDinnerAvailable, CustomMenuAvailable = entity.CustomMenuAvailable, CakeCuttingAllowed = entity.CakeCuttingAllowed,
+            HasBeverages = entity.HasBeverages, BeverageService = entity.BeverageService, BarFacility = entity.BarFacility,
+            OutsideBeveragesAllowed = entity.OutsideBeveragesAllowed, HasAccommodation = entity.HasAccommodation, NumberOfGuestRooms = entity.NumberOfGuestRooms,
+            ComplimentaryBridalSuite = entity.ComplimentaryBridalSuite, RoomTypes = entity.RoomTypes, BridalSuiteAvailable = entity.BridalSuiteAvailable,
+            GuestAccommodationAvailable = entity.GuestAccommodationAvailable, OnSiteAccommodation = entity.OnSiteAccommodation, HasEntertainment = entity.HasEntertainment,
+            DjAllowed = entity.DjAllowed, LiveBandAllowed = entity.LiveBandAllowed, MaxMusicEndTime = entity.MaxMusicEndTime, ProjectorScreen = entity.ProjectorScreen,
+            TraditionalMusicAllowed = entity.TraditionalMusicAllowed, HasDecoration = entity.HasDecoration, DecorationPolicy = entity.DecorationPolicy,
+            TableDecoration = entity.TableDecoration, LightingDecoration = entity.LightingDecoration, OutsideDecoratorAllowed = entity.OutsideDecoratorAllowed,
+            BasicDecorationIncluded = entity.BasicDecorationIncluded, FloralDecorationAvailable = entity.FloralDecorationAvailable, StageDecorationAvailable = entity.StageDecorationAvailable,
+            HasPhotographyPolicy = entity.HasPhotographyPolicy, PhotographyAllowed = entity.PhotographyAllowed, ExternalPhotographerAllowed = entity.ExternalPhotographerAllowed,
+            PreWeddingShootAllowed = entity.PreWeddingShootAllowed, PhotographyLocations = entity.PhotographyLocations, HasPolicies = entity.HasPolicies,
+            DepositRequired = entity.DepositRequired, DepositAmount = entity.DepositAmount, MinimumGuestCount = entity.MinimumGuestCount,
+            MinimumBookingDuration = entity.MinimumBookingDuration, CancellationPolicy = entity.CancellationPolicy, OutsideVendorRestrictions = entity.OutsideVendorRestrictions,
+            AdditionalCharges = entity.AdditionalCharges
+        };
+
+        private static PhotographyDetailsDto MapPhotography(PhotographyDetails entity) => new()
+        {
+            ShootingStyle = entity.ShootingStyle, HoursOfCoverage = entity.HoursOfCoverage, IncludedServices = entity.IncludedServices,
+            PhotosDelivered = entity.PhotosDelivered, DeliveryTimeframe = entity.DeliveryTimeframe, RawFilesIncluded = entity.RawFilesIncluded,
+            DigitalGalleryIncluded = entity.DigitalGalleryIncluded, AlbumIncluded = entity.AlbumIncluded, AlbumType = entity.AlbumType,
+            AlbumPages = entity.AlbumPages, PhotographerCount = entity.PhotographerCount, DroneAllowed = entity.DroneAllowed, BackupGear = entity.BackupGear,
+            VideographyIncluded = entity.VideographyIncluded, VideographerCount = entity.VideographerCount, VideoLength = entity.VideoLength,
+            VideoDeliverables = entity.VideoDeliverables, TravelOutsideColombo = entity.TravelOutsideColombo, OutstationAccommodationRequired = entity.OutstationAccommodationRequired,
+            DepositRequired = entity.DepositRequired, DepositAmount = entity.DepositAmount, CancellationPolicy = entity.CancellationPolicy
+        };
+
+        private static MusicDetailsDto MapMusic(MusicDetails entity) => new()
+        {
+            PerformanceType = entity.PerformanceType, LineupSize = entity.LineupSize, SetDuration = entity.SetDuration, Genres = entity.Genres,
+            SoundSystemIncluded = entity.SoundSystemIncluded, SoundSystemCapacity = entity.SoundSystemCapacity, WirelessMics = entity.WirelessMics,
+            StageLightingIncluded = entity.StageLightingIncluded, LightingRig = entity.LightingRig, SetupTimeRequired = entity.SetupTimeRequired,
+            BackupHardwareOnSite = entity.BackupHardwareOnSite, McServicesIncluded = entity.McServicesIncluded, BreakMusicIncluded = entity.BreakMusicIncluded,
+            CustomSongsAllowed = entity.CustomSongsAllowed, OvertimeRate = entity.OvertimeRate
+        };
+
+        private static DecorationsDetailsDto MapDecorations(DecorationsDetails entity) => new()
+        {
+            PrimaryStyles = entity.PrimaryStyles, ProvidesFlorals = entity.ProvidesFlorals, FloralTypes = entity.FloralTypes,
+            AvailableSetups = entity.AvailableSetups, TablewareLinens = entity.TablewareLinens, CustomSignageIncluded = entity.CustomSignageIncluded,
+            LoungePropsAvailable = entity.LoungePropsAvailable, SetupTimeRequired = entity.SetupTimeRequired, SameDayTeardownIncluded = entity.SameDayTeardownIncluded,
+            VenueRestrictions = entity.VenueRestrictions, OutstationDecorAllowed = entity.OutstationDecorAllowed, TravelFeePolicy = entity.TravelFeePolicy,
+            FreeConsultation = entity.FreeConsultation, CustomMoodboards = entity.CustomMoodboards, DesignFeePolicy = entity.DesignFeePolicy,
+            MinimumBudget = entity.MinimumBudget
+        };
+
+        private static CateringDetailsDto MapCatering(CateringDetails entity) => new()
+        {
+            ServiceStyle = entity.ServiceStyle, Cuisines = entity.Cuisines, DietaryOptions = entity.DietaryOptions,
+            MinGuests = entity.MinGuests, MaxGuests = entity.MaxGuests, PricePerHead = entity.PricePerHead, WaitstaffIncluded = entity.WaitstaffIncluded,
+            GlasswareIncluded = entity.GlasswareIncluded, CrockeryCutlery = entity.CrockeryCutlery, ChafingDishesIncluded = entity.ChafingDishesIncluded,
+            FurnitureRentalAvailable = entity.FurnitureRentalAvailable, SetupTeardownIncluded = entity.SetupTeardownIncluded, OutstationCatering = entity.OutstationCatering,
+            KitchenRequirement = entity.KitchenRequirement, TastingAvailable = entity.TastingAvailable, TastingPolicy = entity.TastingPolicy
+        };
+
+        private static VenueSpaceDto MapVenueSpace(VenueSpace entity) => new()
+        {
+            VenueSpaceId = entity.VenueSpaceId, Name = entity.SpaceName, Type = entity.SpaceType,
+            CapacitySeated = entity.SeatedCapacity, CapacityFloating = entity.FloatingCapacity, IsAirConditioned = entity.AirConditioned ?? false,
+            Description = entity.KeyFeatures
+        };
     }
 }
