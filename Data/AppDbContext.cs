@@ -40,6 +40,7 @@ namespace Backend.Data
         public DbSet<CustomerFavorite> CustomerFavorites { get; set; } = null!;
         public DbSet<ListingView> ListingViews { get; set; } = null!;
         public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
+        public DbSet<VendorInquiry> VendorInquiries { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
