@@ -89,5 +89,13 @@ namespace Backend.Entities
         public ICollection<VendorGalleryImage> GalleryImages { get; set; } = new List<VendorGalleryImage>();
         public ICollection<VendorDocument> Documents { get; set; } = new List<VendorDocument>();
         public ICollection<VendorService> VendorServices { get; set; } = new List<VendorService>();
+
+        [MaxLength(50)]
+        public string? BusinessType { get; set; }
+
+        [MaxLength(50)]
+        public string? BusinessRegistrationNumber { get; set; }
+
+        public DateTime? TermsAcceptedAt { get; set; }
     }
 }

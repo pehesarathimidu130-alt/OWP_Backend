@@ -38,7 +38,11 @@ namespace Backend.Data
         public DbSet<MusicDetails> MusicDetails { get; set; } = null!;
         public DbSet<PhotographyDetails> PhotographyDetails { get; set; } = null!;
         public DbSet<VendorServiceImage> VendorServiceImages { get; set; } = null!;
-
+        public DbSet<UserExternalLogin> UserExternalLogins { get; set; } = null!;
+        public DbSet<CustomerFavorite> CustomerFavorites { get; set; } = null!;
+        public DbSet<ListingView> ListingViews { get; set; } = null!;
+        public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
+        public DbSet<VendorInquiry> VendorInquiries { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -47,6 +51,25 @@ namespace Backend.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
+
+            // Unique index on CustomerFavorites (UserId, ServiceId)
+            modelBuilder.Entity<CustomerFavorite>()
+                .HasIndex(cf => new { cf.UserId, cf.ServiceId })
+                .IsUnique();
+
+            // ListingViews Indexes
+            modelBuilder.Entity<ListingView>()
+                .HasIndex(lv => new { lv.ServiceId, lv.ViewedAt });
+            
+            modelBuilder.Entity<ListingView>()
+                .HasIndex(lv => lv.ViewedAt);
+
+            // AiSuggestionLogs Indexes
+            modelBuilder.Entity<AiSuggestionLog>()
+                .HasIndex(al => new { al.ServiceId, al.SuggestedAt });
+
+            modelBuilder.Entity<AiSuggestionLog>()
+                .HasIndex(al => al.CustomerId);
 
             // 1:1 relationship between User and Admin
             modelBuilder.Entity<Admin>()
@@ -122,6 +145,12 @@ namespace Backend.Data
                 .WithOne(d => d.VendorService)
                 .HasForeignKey<PhotographyDetails>(d => d.ServiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        }
+
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            base.ConfigureConventions(configurationBuilder);
+            configurationBuilder.Properties<DateTime>().HaveColumnType("timestamp with time zone");
         }
 
         public override int SaveChanges()

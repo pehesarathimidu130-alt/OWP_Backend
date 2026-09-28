@@ -10,8 +10,7 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 
 // Allow DateTime with Kind=Unspecified to be written to PostgreSQL timestamp columns.
-// Without this, form-submitted dates (which ASP.NET parses as Unspecified)  cause a runtime error.
-// .
+// Without this, form-submitted dates (which ASP.NET parses as Unspecified) cause a runtime error.
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,17 +23,24 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString;
     });
 
-// Configure Entity Framework and PostgreSQL
+// Configure Entity Framework and PostgreSQL (Neon: retries + longer timeouts for cold starts)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? "Host=localhost;Database=oleena;Username=postgres;Password=postgres"; // Placeholder for Neon
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsql =>
+    {
+        npgsql.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null);
+        npgsql.CommandTimeout(60);
+    }));
 
 // Configure Global Exception Handler
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// Register Application Services
+// Register Application Services (Combined from dev and feature branch)
 builder.Services.AddScoped<Backend.Services.IAuthService, Backend.Services.AuthService>();
 builder.Services.AddScoped<Backend.Services.IAdminManagementService, Backend.Services.AdminManagementService>();
 builder.Services.AddScoped<Backend.Services.IVendorContentService, Backend.Services.VendorContentService>();
@@ -44,6 +50,10 @@ builder.Services.AddScoped<Backend.Services.IAnalyticsService, Backend.Services.
 builder.Services.AddScoped<Backend.Services.ICustomerManagementService, Backend.Services.CustomerManagementService>();
 builder.Services.AddScoped<Backend.Services.IVendorRegistrationService, Backend.Services.VendorRegistrationService>();
 builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Services.GoogleTokenVerifier>();
+builder.Services.AddScoped<Backend.Services.IReportAnalyticsService, Backend.Services.ReportAnalyticsService>();
+builder.Services.AddScoped<Backend.Services.ICustomerAuthService, Backend.Services.CustomerAuthService>();
+builder.Services.AddScoped<Backend.Services.IEmailService, Backend.Services.EmailService>();
+builder.Services.AddScoped<Backend.Services.IVendorPerformanceService, Backend.Services.VendorPerformanceService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -60,8 +70,8 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-        ValidateIssuer = false, // Or true, and specify ValidIssuer
-        ValidateAudience = false, // Or true, and specify ValidAudience
+        ValidateIssuer = false,
+        ValidateAudience = false,
         ValidateLifetime = true
     };
 });
@@ -105,14 +115,14 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp", policy =>
     {
         policy.WithOrigins(
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "http://localhost:5174",
-                    "http://127.0.0.1:5174",
-                    "http://localhost:5175",
-                    "http://127.0.0.1:5175",
-                    "http://localhost:3000")
-              .SetIsOriginAllowed(origin => true) // Allows any origin dynamically
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:5175",
+                "http://127.0.0.1:5175",
+                "http://localhost:3000")
+              .SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -121,7 +131,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-app.UseExceptionHandler(); // Global error handling
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

@@ -110,5 +110,27 @@ namespace Backend.Services
                 CreatedAt = notification.CreatedAt
             };
         }
+
+        public async Task CreateForAllAdminsAsync(string type, string title, string message, int? excludeUserId = null)
+        {
+            var adminUserIds = await _context.Admins
+                .Where(a => excludeUserId == null || a.UserId != excludeUserId)
+                .Select(a => a.UserId)
+                .ToListAsync();
+
+            if (adminUserIds.Count == 0) return;
+
+            var notifications = adminUserIds.Select(userId => new Backend.Entities.Notification
+            {
+                UserId = userId,
+                Type = type,
+                Title = title,
+                Message = message,
+                IsRead = false
+            }).ToList();
+
+            _context.Notifications.AddRange(notifications);
+            await _context.SaveChangesAsync();
+        }
     }
 }

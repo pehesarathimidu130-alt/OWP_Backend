@@ -137,4 +137,48 @@ namespace Backend.DTOs
 
         public SocialLinksDto? SocialLinks { get; set; }
     }
+
+    /// Customer-facing vendor profile (no documents, user account, or internal fields).
+    public class PublicVendorProfileDto
+    {
+        public int VendorId { get; set; }
+        public string BusinessName { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public string? Tagline { get; set; }
+        public string? Description { get; set; }
+        public string? OwnerName { get; set; }
+        public string? ContactNumber { get; set; }
+        public string? AltPhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public string? WebsiteUrl { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Country { get; set; }
+        public string? ServiceAreas { get; set; }
+        public string? TravelPolicy { get; set; }
+        public int? YearsInBusiness { get; set; }
+        public bool IsApproved { get; set; }
+        public string? LogoUrl { get; set; }
+        public string? CoverImageUrl { get; set; }
+        public string Location { get; set; } = "Sri Lanka";
+        public int ReviewCount { get; set; }
+        public List<BusinessHoursItemDto> BusinessHours { get; set; } = new();
+        public SocialLinksDto SocialLinks { get; set; } = new();
+        public List<VendorGalleryImageDto> GalleryImages { get; set; } = new();
+        public List<VendorPerformanceResponseDto> Performances { get; set; } = new();
+        public List<PublicVendorServiceItemDto> Services { get; set; } = new();
+    }
+
+    public class PublicVendorServiceItemDto
+    {
+        public int ServiceId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public string? ShortDescription { get; set; }
+        public decimal? Price { get; set; }
+        public bool IsPriceOnRequest { get; set; }
+        public string? CoverImageUrl { get; set; }
+    }
 }

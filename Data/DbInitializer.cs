@@ -10,6 +10,42 @@ namespace Backend.Data
         {
             try
             {
+                // Ensure CustomerFavorites table exists
+                try
+                {
+                    await context.Database.ExecuteSqlRawAsync(@"
+                        CREATE TABLE IF NOT EXISTS ""CustomerFavorites"" (
+                            ""FavoriteId"" SERIAL PRIMARY KEY,
+                            ""UserId"" INTEGER NOT NULL REFERENCES ""Users""(""UserId"") ON DELETE CASCADE,
+                            ""CustomerId"" INTEGER NULL REFERENCES ""Customers""(""CustomerId"") ON DELETE CASCADE,
+                            ""ServiceId"" INTEGER NOT NULL REFERENCES ""VendorServices""(""ServiceId"") ON DELETE CASCADE,
+                            ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT ""UQ_CustomerFavorites_User_Service"" UNIQUE (""UserId"", ""ServiceId"")
+                        );
+
+                        CREATE TABLE IF NOT EXISTS ""VendorInquiries"" (
+                            ""InquiryId"" SERIAL PRIMARY KEY,
+                            ""UserId"" INTEGER NULL REFERENCES ""Users""(""UserId"") ON DELETE SET NULL,
+                            ""CustomerId"" INTEGER NULL REFERENCES ""Customers""(""CustomerId"") ON DELETE SET NULL,
+                            ""VendorId"" INTEGER NULL REFERENCES ""Vendors""(""VendorId"") ON DELETE CASCADE,
+                            ""ServiceId"" INTEGER NULL REFERENCES ""VendorServices""(""ServiceId"") ON DELETE SET NULL,
+                            ""WeddingDate"" TIMESTAMP WITH TIME ZONE NULL,
+                            ""GuestCount"" INTEGER NULL,
+                            ""Budget"" NUMERIC NULL,
+                            ""Message"" TEXT NULL,
+                            ""AttachmentUrl"" VARCHAR(500) NULL,
+                            ""Status"" VARCHAR(50) NOT NULL DEFAULT 'Pending',
+                            ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        );
+                    ");
+                }
+                catch (Exception tblEx)
+                {
+                    logger.LogWarning("CustomerFavorites table check note: {Msg}", tblEx.Message);
+                }
+
                 // 1. Ensure essential roles exist
                 var roles = await context.Roles.ToListAsync();
                 if (!roles.Any())

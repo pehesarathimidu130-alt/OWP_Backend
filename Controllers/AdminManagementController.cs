@@ -2,21 +2,35 @@ using Backend.DTOs;
 using Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Backend.Controllers
 {
     [ApiController]
     [Route("api/admin-management")]
-    [Authorize(Roles = "SUPER_ADMIN,ADMIN,Admin")]
+    [Authorize(Roles = "SUPER_ADMIN,ADMIN,Admin,SuperAdmin")]
     public class AdminManagementController : ControllerBase
     {
         private readonly IAdminManagementService _adminService;
+        private readonly INotificationService _notificationService;
         private readonly ILogger<AdminManagementController> _logger;
 
-        public AdminManagementController(IAdminManagementService adminService, ILogger<AdminManagementController> logger)
+        public AdminManagementController(
+            IAdminManagementService adminService,
+            INotificationService notificationService,
+            ILogger<AdminManagementController> logger)
         {
             _adminService = adminService;
+            _notificationService = notificationService;
             _logger = logger;
+        }
+
+        private int? GetCallerUserId()
+        {
+            var claim = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (int.TryParse(claim, out var userId))
+                return userId;
+            return null;
         }
 
         /// <summary>
@@ -51,6 +65,15 @@ namespace Backend.Controllers
             try
             {
                 var result = await _adminService.CreateAdminAsync(request);
+
+                var currentUserId = GetCallerUserId();
+                await _notificationService.CreateForAllAdminsAsync(
+                    Backend.Constants.NotificationTypes.AdminAccountCreated,
+                    "New Admin Account Created",
+                    $"A new administrator account ({result.FullName}) has been created.",
+                    currentUserId
+                );
+
                 return StatusCode(StatusCodes.Status201Created, result);
             }
             catch (ArgumentException ex)

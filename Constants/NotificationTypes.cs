@@ -18,5 +18,8 @@ namespace Backend.Constants
         public const string ContentFlagged = "ContentFlagged";
         public const string CredentialSubmitted = "CredentialSubmitted";
         public const string DisputeFiled = "DisputeFiled";
+        public const string ProfileUpdated = "ProfileUpdated";
+        public const string AdminAccountCreated = "AdminAccountCreated";
+        public const string AiApprovalRequired = "AiApprovalRequired";
     }
 }

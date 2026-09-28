@@ -369,9 +369,20 @@ namespace Backend.Services
                 return false;
             }
 
-            if (admin.UserId == currentUserId || admin.AdminId == currentUserId)
+            if (admin.UserId == currentUserId)
             {
                 throw new InvalidOperationException("You cannot delete your own active Super Admin account.");
+            }
+
+            if (admin.AccessLevel.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) && admin.User != null && admin.User.IsActive)
+            {
+                var activeSuperAdminCount = await _context.Admins
+                    .CountAsync(a => a.AccessLevel.ToLower() == "superadmin" && a.User != null && a.User.IsActive);
+                    
+                if (activeSuperAdminCount <= 1)
+                {
+                    throw new InvalidOperationException("Cannot delete the last remaining active Super Admin account.");
+                }
             }
 
             var linkedUser = admin.User;

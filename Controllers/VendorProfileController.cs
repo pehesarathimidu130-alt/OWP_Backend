@@ -39,7 +39,8 @@ namespace Backend.Controllers
         }
 
         [HttpPost("logo")]
-        public async Task<IActionResult> UploadLogo([FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadLogo(IFormFile file)
         {
             try
             {
@@ -60,7 +61,8 @@ namespace Backend.Controllers
         }
 
         [HttpPost("cover")]
-        public async Task<IActionResult> UploadCover([FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadCover(IFormFile file)
         {
             try
             {
@@ -81,8 +83,9 @@ namespace Backend.Controllers
         }
 
         [HttpPost("gallery")]
+        [Consumes("multipart/form-data")]
         public async Task<IActionResult> AddGalleryImage(
-            [FromForm] IFormFile file,
+            IFormFile file,
             [FromForm] string? caption,
             [FromForm] string? category)
         {
@@ -126,8 +129,9 @@ namespace Backend.Controllers
         }
 
         [HttpPost("documents")]
+        [Consumes("multipart/form-data")]
         public async Task<IActionResult> UploadDocument(
-            [FromForm] IFormFile file,
+            IFormFile file,
             [FromForm] string documentName,
             [FromForm] string documentType)
         {

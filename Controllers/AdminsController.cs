@@ -202,11 +202,6 @@ namespace Backend.Controllers
                 return Unauthorized(new { message = "Caller identity could not be verified." });
             }
 
-            if (id == currentUserId.Value)
-            {
-                return BadRequest(new { message = "You cannot delete your own active Super Admin account." });
-            }
-
             try
             {
                 var success = await _adminService.DeleteAdministratorAsync(id, currentUserId.Value);

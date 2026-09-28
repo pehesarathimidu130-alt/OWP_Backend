@@ -71,8 +71,24 @@ namespace Backend.Services
 
         public async Task<LoginResponseDto> RegisterAsync(VendorRegistrationRequest request)
         {
-            bool isGoogleFlow = false;
+            // ── 0. Google flow: verify token and override email/name ──
+            bool isGoogleFlow = !string.IsNullOrWhiteSpace(request.GoogleIdToken);
             GoogleTokenResult? googleResult = null;
+
+            if (isGoogleFlow)
+            {
+                // Verify the token (throws UnauthorizedAccessException or HttpRequestException)
+                googleResult = await _googleTokenVerifier.VerifyAsync(request.GoogleIdToken!);
+
+                // Check if this Google subject is already linked to an account
+                var existingLink = await _context.UserExternalLogins
+                    .AnyAsync(uel => uel.Provider == "Google" && uel.ProviderSubject == googleResult.Sub);
+                if (existingLink)
+                {
+                    throw new DuplicateEmailException(googleResult.Email,
+                        "This Google account is already linked to an existing account.");
+                }
+            }
 
             // ── 1. Normalize (Google flow: email and fullName come from the token) ──
             var fullName = isGoogleFlow ? googleResult!.FullName.Trim() : (request.FullName?.Trim() ?? "");
@@ -205,7 +221,6 @@ namespace Backend.Services
                 string passwordHash;
                 if (isGoogleFlow)
                 {
-                    // 32 cryptographically random bytes → BCrypt hash → account cannot be entered via password form
                     var randomBytes = RandomNumberGenerator.GetBytes(32);
                     passwordHash = BCrypt.Net.BCrypt.HashPassword(Convert.ToBase64String(randomBytes));
                 }
@@ -228,7 +243,17 @@ namespace Backend.Services
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-
+                // Create UserExternalLogin for Google flow
+                if (isGoogleFlow)
+                {
+                    _context.UserExternalLogins.Add(new UserExternalLogin
+                    {
+                        UserId = user.UserId,
+                        Provider = "Google",
+                        ProviderSubject = googleResult!.Sub
+                    });
+                    await _context.SaveChangesAsync();
+                }
 
                 // Create Vendor
                 var vendor = new Vendor
@@ -236,9 +261,12 @@ namespace Backend.Services
                     UserId = user.UserId,
                     OwnerName = fullName,
                     BusinessName = businessName,
+                    BusinessType = businessType,
                     Category = category,
+                    Tagline = string.IsNullOrWhiteSpace(tagline) ? null : tagline,
                     Description = description,
                     YearsInBusiness = request.YearsInBusiness,
+                    BusinessRegistrationNumber = string.IsNullOrWhiteSpace(businessRegNumber) ? null : businessRegNumber,
                     Email = businessEmail,
                     ContactNumber = contactNumber,
                     AltPhoneNumber = altPhoneNumber,
@@ -249,7 +277,7 @@ namespace Backend.Services
                     PostalCode = string.IsNullOrWhiteSpace(postalCode) ? null : postalCode,
                     Country = "Sri Lanka",
                     ServiceAreas = string.Join(", ", serviceAreas),
-                    // System-set pending values
+                    TermsAcceptedAt = DateTime.UtcNow,
                     IsApproved = false,
                     Status = "Pending",
                     VerificationStatus = "Pending"
@@ -258,12 +286,23 @@ namespace Backend.Services
                 _context.Vendors.Add(vendor);
                 await _context.SaveChangesAsync();
 
-                // ── 6. Build login response (after commit, so UserId is final) ──
-                return new LoginResponseDto { Token = "mock_token", UserId = user.UserId, FullName = user.FullName, Email = user.Email, Role = "VENDOR" };
+                // Notify all admins
+                await _notificationService.CreateForAllAdminsAsync(
+                    NotificationTypes.VendorRegistered,
+                    "New vendor registration",
+                    $"{businessName} has registered as a new vendor. Please review and verify their identity and account.");
+
+                await transaction.CommitAsync();
+
+                _logger.LogInformation(
+                    "Vendor registered successfully ({Flow}): UserId={UserId}, BusinessName={BusinessName}",
+                    isGoogleFlow ? "Google" : "Password", user.UserId, businessName);
+
+                // ── 6. Build login response ──
+                return _authService.BuildVendorLoginResponse(user);
             }
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                // Race condition: another request inserted the same email or Google sub between our check and insert
                 await transaction.RollbackAsync();
                 throw new DuplicateEmailException(email);
             }
@@ -297,17 +336,11 @@ namespace Backend.Services
 
         private static bool IsUniqueConstraintViolation(DbUpdateException ex)
         {
-            // PostgreSQL error code 23505 = unique_violation
             var inner = ex.InnerException;
             return inner != null && inner.Message.Contains("23505");
         }
     }
 
-    // ── Custom exception types for the controller to map to HTTP responses ──
-
-    /// <summary>
-    /// Thrown when service-level validation fails (multiple field errors).
-    /// </summary>
     public class ValidationException : Exception
     {
         public Dictionary<string, string[]> Errors { get; }
@@ -318,9 +351,6 @@ namespace Backend.Services
         }
     }
 
-    /// <summary>
-    /// Thrown when the email is already registered (409 Conflict).
-    /// </summary>
     public class DuplicateEmailException : Exception
     {
         public string EmailAddress { get; }

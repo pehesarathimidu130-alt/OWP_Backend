@@ -41,6 +41,36 @@ This document outlines the notification architecture for the Oleena platform, th
   });
   ```
 
+### `SecurityChange`
+- **Constant**: `NotificationTypes.SecurityChange`
+- **Owner / Feature**: Account Security & Authentication
+- **Location**: `Backend.Controllers.AdminSettingsController` in `SavePin` and `ChangePassword`.
+- **Trigger Condition**: When an admin successfully changes their PIN or password.
+- **Wiring Detail**: 
+  ```csharp
+  await _notificationService.CreateAsync(userId.Value, NotificationTypes.SecurityChange, "Security Settings Updated", "Your PIN was changed successfully.");
+  ```
+
+### `ProfileUpdated`
+- **Constant**: `NotificationTypes.ProfileUpdated`
+- **Owner / Feature**: Admin Profile Management
+- **Location**: `Backend.Controllers.AdminSettingsController` in `UpdateProfile`.
+- **Trigger Condition**: When an admin successfully updates their profile details.
+- **Wiring Detail**: 
+  ```csharp
+  await _notificationService.CreateAsync(userId.Value, NotificationTypes.ProfileUpdated, "Profile Updated", "Your admin profile information has been successfully updated.");
+  ```
+
+### `AdminAccountCreated`
+- **Constant**: `NotificationTypes.AdminAccountCreated`
+- **Owner / Feature**: Admin Management
+- **Location**: `Backend.Controllers.AdminManagementController` in `CreateAdmin`.
+- **Trigger Condition**: When a new admin account is created.
+- **Wiring Detail**: Broadcasted to all admins except the creator:
+  ```csharp
+  await _notificationService.CreateForAllAdminsAsync(NotificationTypes.AdminAccountCreated, "New Admin Account Created", $"A new administrator account ({result.FullName}) has been created.", currentUserId);
+  ```
+
 ---
 
 ## 3. Pending Notification Triggers to Wire
@@ -58,10 +88,10 @@ For every unwired constant in `Backend.Constants.NotificationTypes`, the table b
 | `CredentialRejected` | Vendor Credentials & Verification | Vinu | `VendorProfileService.RejectDocumentAsync` (when admin rejects document) | `await _notificationService.CreateAsync(vendor.UserId, NotificationTypes.CredentialRejected, "Credential Rejected", $"Your verification document \"{document.DocumentName}\" was rejected. Reason: {reason}");` |
 | `CredentialExpired` | Background Credential Expiration Monitor | Vinu | `CredentialExpirationWorker.ExecuteAsync` (scheduled daily background task) | `await _notificationService.CreateAsync(vendor.UserId, NotificationTypes.CredentialExpired, "Credential Expired", $"Your document \"{document.DocumentName}\" has expired. Please upload an updated copy.");` |
 | `CredentialSubmitted` | Vendor Credentials Upload Flow | Vinu | `VendorProfileService.UploadDocumentAsync` (when vendor uploads a new credential) | `await _notificationService.CreateAsync(adminUserId, NotificationTypes.CredentialSubmitted, "New Credential Submitted", $"Vendor \"{vendor.BusinessName}\" submitted \"{document.DocumentName}\" for verification.");` |
-| `SecurityChange` | Account Security & Authentication | Auth Team | `AuthService.ChangePasswordAsync` / `UpdateSecuritySettingsAsync` | `await _notificationService.CreateAsync(user.UserId, NotificationTypes.SecurityChange, "Security Alert", "Your account password or security settings were recently changed.");` |
 | `VendorRegistered` | Admin Vendor Approval Queue | Admin Team | `AdminManagementService` (when vendor completes signup and enters approval queue) | `await _notificationService.CreateAsync(adminUserId, NotificationTypes.VendorRegistered, "New Vendor Registered", $"A new vendor, {businessName}, has registered and is awaiting approval.");` |
 | `ContentFlagged` | Admin Moderation Queue | Admin / Support Team | `ModerationService.ReportContentAsync` (when user/customer reports content) | `await _notificationService.CreateAsync(adminUserId, NotificationTypes.ContentFlagged, "Content Flagged for Review", $"Content #{contentId} has been flagged by a user and requires moderator review.");` |
 | `DisputeFiled` | Customer Bookings & Dispute Resolution | Support Team | `DisputeService.CreateDisputeAsync` (when customer or vendor files dispute) | `await _notificationService.CreateAsync(targetUserId, NotificationTypes.DisputeFiled, "Dispute Filed", $"A dispute has been opened regarding booking #{bookingId}. Our support team is reviewing it.");` |
+| `AiApprovalRequired` | AI Human-Approval Gate | AI Agent System | Pending AI Approval Gate Feature (Not yet built) | N/A - Tied to upcoming AI agent feature |
 
 > [!IMPORTANT]
 > **Important Distinction: `ContentFlagged` vs. `ListingFlagged`**

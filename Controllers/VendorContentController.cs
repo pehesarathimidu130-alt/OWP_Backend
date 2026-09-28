@@ -94,7 +94,8 @@ namespace Backend.Controllers
         }
 
         [HttpPost("services/{serviceId:int}/images")]
-        public async Task<IActionResult> UploadServiceImage(int serviceId, [FromForm] IFormFile file, [FromForm] bool isCover = false)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadServiceImage(int serviceId, IFormFile file, [FromForm] bool isCover = false)
         {
             try
             {
@@ -129,7 +130,8 @@ namespace Backend.Controllers
         public async Task<IActionResult> GetPerformances() => Ok(await _service.GetPerformancesAsync(GetUserId()));
 
         [HttpPost("performances")]
-        public async Task<IActionResult> AddPerformance([FromForm] VendorPerformanceRequestDto request, [FromForm] IFormFile? photo)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> AddPerformance([FromForm] VendorPerformanceRequestDto request, IFormFile? photo)
         {
             try
             {
@@ -142,7 +144,8 @@ namespace Backend.Controllers
         }
 
         [HttpPut("performances/{performanceId:int}")]
-        public async Task<IActionResult> UpdatePerformance(int performanceId, [FromForm] VendorPerformanceRequestDto request, [FromForm] IFormFile? photo)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdatePerformance(int performanceId, [FromForm] VendorPerformanceRequestDto request, IFormFile? photo)
         {
             try
             {

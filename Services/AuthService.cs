@@ -25,9 +25,10 @@ namespace Backend.Services
         public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request)
         {
             // ── 1. Find user by email (include the Role navigation) ──
+            var email = request.Email?.Trim().ToLower();
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == request.Email);
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
             if (user == null)
             {
@@ -136,6 +137,19 @@ namespace Backend.Services
             {
                 Token = token,
                 Role = normalizedRole,
+                FullName = user.FullName,
+                Email = user.Email,
+                UserId = user.UserId
+            };
+        }
+
+        public LoginResponseDto BuildVendorLoginResponse(User user)
+        {
+            var token = GenerateJwtToken(user, "Vendor");
+            return new LoginResponseDto
+            {
+                Token = token,
+                Role = "Vendor",
                 FullName = user.FullName,
                 Email = user.Email,
                 UserId = user.UserId
