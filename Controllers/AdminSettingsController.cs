@@ -1,7 +1,11 @@
+using Backend.Data;
 using Backend.DTOs;
 using Backend.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.IO;
 using System.Security.Claims;
 
 namespace Backend.Controllers
@@ -9,14 +13,6 @@ namespace Backend.Controllers
     /// <summary>
     /// AdminSettingsController — handles settings actions for the currently logged-in admin.
     /// Route prefix: /api/admin/me
-    ///
-    /// Endpoints implemented here:
-    ///   POST /api/admin/me/pin/verify   — verify current PIN without changing it
-    ///   POST /api/admin/me/pin/generate — generate a candidate PIN without saving it to DB
-    ///   POST /api/admin/me/pin/save     — save confirmed new PIN to DB
-    ///
-    /// UserId is read from the JWT claim (ClaimTypes.NameIdentifier), which is set by
-    /// AuthService.GenerateJwtToken() using the User.UserId from the database.
     /// </summary>
     [ApiController]
     [Route("api/admin/me")]
@@ -25,15 +21,21 @@ namespace Backend.Controllers
     {
         private readonly IAdminManagementService _adminService;
         private readonly INotificationService _notificationService;
+        private readonly AppDbContext _context;
+        private readonly IWebHostEnvironment _environment;
         private readonly ILogger<AdminSettingsController> _logger;
 
         public AdminSettingsController(
             IAdminManagementService adminService,
             INotificationService notificationService,
+            AppDbContext context,
+            IWebHostEnvironment environment,
             ILogger<AdminSettingsController> logger)
         {
             _adminService = adminService;
             _notificationService = notificationService;
+            _context = context;
+            _environment = environment;
             _logger = logger;
         }
 
@@ -258,6 +260,247 @@ namespace Backend.Controllers
             );
 
             return Ok(new { success = true, message = "Profile updated successfully." });
+        }
+
+        /// <summary>
+        /// GET /api/admin/me
+        /// Retrieves the current authenticated admin's profile.
+        /// </summary>
+        [HttpGet]
+        [ProducesResponseType(typeof(AdminProfileResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetProfile()
+        {
+            var userId = GetCallerUserId();
+            if (userId == null)
+                return Unauthorized(new { detail = "Unable to identify the caller from the JWT token." });
+
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.UserId == userId.Value);
+
+            if (admin == null)
+                return NotFound(new { detail = "Administrator profile not found." });
+
+            return Ok(new AdminProfileResponseDto
+            {
+                AdminId = admin.AdminId,
+                UserId = admin.UserId,
+                FullName = admin.FullName,
+                FirstName = admin.FirstName,
+                LastName = admin.LastName,
+                Email = admin.User?.Email ?? string.Empty,
+                Role = admin.AccessLevel,
+                Department = admin.Department,
+                PhoneNumber = admin.PhoneNumber,
+                ProfilePictureUrl = admin.ProfilePictureUrl,
+                CreatedAt = admin.CreatedAt,
+                UpdatedAt = admin.UpdatedAt
+            });
+        }
+
+        /// <summary>
+        /// POST /api/admin/me/photo
+        /// Uploads/updates the current admin's profile photo.
+        /// Reuses the vendor image upload pattern (JWT-scoped, jpg/jpeg/png/webp validation, 5MB limit).
+        /// </summary>
+        [HttpPost("photo")]
+        [Consumes("multipart/form-data")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UploadPhoto(IFormFile file)
+        {
+            var userId = GetCallerUserId();
+            if (userId == null)
+                return Unauthorized(new { detail = "Unable to identify the caller from the JWT token." });
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId.Value);
+            if (admin == null)
+                return NotFound(new { detail = "Administrator profile not found." });
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { detail = "Please provide a valid image file." });
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new { detail = $"Unsupported file format '{extension}'. Allowed: {string.Join(", ", allowedExtensions)}" });
+            }
+
+            const long maxSizeBytes = 5 * 1024 * 1024; // 5 MB
+            if (file.Length > maxSizeBytes)
+            {
+                return BadRequest(new { detail = "Image size exceeds the 5 MB limit." });
+            }
+
+            var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var folder = Path.Combine(rootPath, "uploads", "admin-profile");
+            Directory.CreateDirectory(folder);
+
+            // Delete existing profile photo if exists
+            if (!string.IsNullOrWhiteSpace(admin.ProfilePictureUrl))
+            {
+                try
+                {
+                    var oldCleanPath = admin.ProfilePictureUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                    var oldFullPath = Path.Combine(rootPath, oldCleanPath);
+                    if (System.IO.File.Exists(oldFullPath))
+                    {
+                        System.IO.File.Delete(oldFullPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete old profile photo: {Url}", admin.ProfilePictureUrl);
+                }
+            }
+
+            var fileName = $"{Guid.NewGuid():N}{extension}";
+            var destinationPath = Path.Combine(folder, fileName);
+
+            await using (var stream = System.IO.File.Create(destinationPath))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var relativeUrl = $"/uploads/admin-profile/{fileName}";
+            admin.ProfilePictureUrl = relativeUrl;
+            admin.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            await _notificationService.CreateAsync(
+                userId.Value,
+                Backend.Constants.NotificationTypes.ProfileUpdated,
+                "Profile Photo Updated",
+                "Your profile photo has been successfully updated."
+            );
+
+            return Ok(new
+            {
+                photoUrl = relativeUrl,
+                message = "Profile photo updated successfully."
+            });
+        }
+
+        /// <summary>
+        /// DELETE /api/admin/me/photo
+        /// Removes the current admin's profile photo.
+        /// </summary>
+        [HttpDelete("photo")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> RemovePhoto()
+        {
+            var userId = GetCallerUserId();
+            if (userId == null)
+                return Unauthorized(new { detail = "Unable to identify the caller from the JWT token." });
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId.Value);
+            if (admin == null)
+                return NotFound(new { detail = "Administrator profile not found." });
+
+            if (!string.IsNullOrWhiteSpace(admin.ProfilePictureUrl))
+            {
+                try
+                {
+                    var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                    var cleanPath = admin.ProfilePictureUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                    var fullPath = Path.Combine(rootPath, cleanPath);
+                    if (System.IO.File.Exists(fullPath))
+                    {
+                        System.IO.File.Delete(fullPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete profile photo file: {Url}", admin.ProfilePictureUrl);
+                }
+
+                admin.ProfilePictureUrl = null;
+                admin.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { message = "Profile photo removed successfully." });
+        }
+
+        /// <summary>
+        /// GET /api/admin/me/notifications
+        /// Retrieves the current admin's notification preferences.
+        /// </summary>
+        [HttpGet("notifications")]
+        [ProducesResponseType(typeof(AdminNotificationPreferencesDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetNotificationPreferences()
+        {
+            var userId = GetCallerUserId();
+            if (userId == null)
+                return Unauthorized(new { detail = "Unable to identify the caller from the JWT token." });
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId.Value);
+            if (admin == null)
+                return NotFound(new { detail = "Administrator profile not found." });
+
+            return Ok(new AdminNotificationPreferencesDto
+            {
+                NewVendorPending = admin.NotifyNewVendorPending,
+                FlaggedContent = admin.NotifyFlaggedContent,
+                CustomerComplaint = admin.NotifyCustomerComplaint,
+                AiWorkflowApproval = admin.NotifyAiWorkflowApproval,
+                WeeklySummary = admin.NotifyWeeklySummary
+            });
+        }
+
+        /// <summary>
+        /// PUT /api/admin/me/notifications
+        /// Updates the current admin's notification preferences.
+        /// </summary>
+        [HttpPut("notifications")]
+        [ProducesResponseType(typeof(AdminNotificationPreferencesDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateNotificationPreferences([FromBody] UpdateAdminNotificationPreferencesDto request)
+        {
+            var userId = GetCallerUserId();
+            if (userId == null)
+                return Unauthorized(new { detail = "Unable to identify the caller from the JWT token." });
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId.Value);
+            if (admin == null)
+                return NotFound(new { detail = "Administrator profile not found." });
+
+            if (request.NewVendorPending.HasValue)
+                admin.NotifyNewVendorPending = request.NewVendorPending.Value;
+            if (request.FlaggedContent.HasValue)
+                admin.NotifyFlaggedContent = request.FlaggedContent.Value;
+            if (request.CustomerComplaint.HasValue)
+                admin.NotifyCustomerComplaint = request.CustomerComplaint.Value;
+            if (request.AiWorkflowApproval.HasValue)
+                admin.NotifyAiWorkflowApproval = request.AiWorkflowApproval.Value;
+            if (request.WeeklySummary.HasValue)
+                admin.NotifyWeeklySummary = request.WeeklySummary.Value;
+
+            admin.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Notification preferences updated for Admin UserId {UserId}", userId);
+
+            return Ok(new AdminNotificationPreferencesDto
+            {
+                NewVendorPending = admin.NotifyNewVendorPending,
+                FlaggedContent = admin.NotifyFlaggedContent,
+                CustomerComplaint = admin.NotifyCustomerComplaint,
+                AiWorkflowApproval = admin.NotifyAiWorkflowApproval,
+                WeeklySummary = admin.NotifyWeeklySummary
+            });
         }
     }
 }

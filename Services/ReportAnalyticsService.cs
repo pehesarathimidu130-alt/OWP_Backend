@@ -121,15 +121,17 @@ namespace Backend.Services
                         Label = cat,
                         Count = vendors.Count(v =>
                             (v.Category ?? string.Empty)
-                                .Equals(cat, StringComparison.OrdinalIgnoreCase)),
+                                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                                .Any(c => c.Equals(cat, StringComparison.OrdinalIgnoreCase))),
                     })
                     .ToList();
 
                 // Vendors with a category not in KnownCategories → "Other"
                 var otherCount = vendors.Count(v =>
                     !string.IsNullOrWhiteSpace(v.Category) &&
-                    !KnownCategories.Any(k =>
-                        k.Equals(v.Category, StringComparison.OrdinalIgnoreCase)));
+                    !v.Category
+                        .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Any(c => KnownCategories.Any(k => k.Equals(c, StringComparison.OrdinalIgnoreCase))));
 
                 if (otherCount > 0)
                     categoryBreakdown.Add(new CategoryCountDto { Label = "Other", Count = otherCount });

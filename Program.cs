@@ -23,17 +23,44 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString;
     });
 
-// Configure Entity Framework and PostgreSQL (Neon: retries + longer timeouts for cold starts)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? "Host=localhost;Database=oleena;Username=postgres;Password=postgres"; // Placeholder for Neon
+// Configure Entity Framework and PostgreSQL
+// Force IPv4 to avoid SSL handshake failures on IPv6 with Neon's pooler.
+// Channel Binding is intentionally omitted — Neon's PgBouncer pooler does not support it.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Host=localhost;Database=oleena;Username=postgres;Password=postgres";
+
+var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
+
+// Neon Serverless Resiliency Settings:
+// 1. Neon cold-starts can take 2-5 seconds to wake up compute. Allow up to 60s for handshake.
+if (dataSourceBuilder.ConnectionStringBuilder.Timeout < 60)
+{
+    dataSourceBuilder.ConnectionStringBuilder.Timeout = 60;
+}
+if (dataSourceBuilder.ConnectionStringBuilder.CommandTimeout < 60)
+{
+    dataSourceBuilder.ConnectionStringBuilder.CommandTimeout = 60;
+}
+// 2. Keep connections alive so proxies (Neon / AWS / ISP routers) do not terminate idle TCP streams
+dataSourceBuilder.ConnectionStringBuilder.KeepAlive = 30;
+dataSourceBuilder.ConnectionStringBuilder.ConnectionIdleLifetime = 60;
+dataSourceBuilder.ConnectionStringBuilder.ConnectionPruningInterval = 10;
+dataSourceBuilder.ConnectionStringBuilder.NoResetOnClose = true;
+
+// 3. Channel Binding: Neon's PgBouncer pooler (-pooler) does not support it at all.
+// Explicitly disable to prevent SSL handshake failures.
+dataSourceBuilder.ConnectionStringBuilder.ChannelBinding = Npgsql.ChannelBinding.Disable;
+
+// Build a shared data source so all EF connections reuse the same Npgsql pool
+var dataSource = dataSourceBuilder.Build();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString, npgsql =>
+    options.UseNpgsql(dataSource, npgsql =>
     {
         npgsql.EnableRetryOnFailure(
             maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(10),
+            maxRetryDelay: TimeSpan.FromSeconds(5),
             errorCodesToAdd: null);
-        npgsql.CommandTimeout(60);
     }));
 
 // Configure Global Exception Handler
@@ -51,8 +78,11 @@ builder.Services.AddScoped<Backend.Services.IGoogleTokenVerifier, Backend.Servic
 builder.Services.AddScoped<Backend.Services.IReportAnalyticsService, Backend.Services.ReportAnalyticsService>();
 builder.Services.AddScoped<Backend.Services.ICustomerAuthService, Backend.Services.CustomerAuthService>();
 builder.Services.AddScoped<Backend.Services.IEmailService, Backend.Services.EmailService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Backend.Services.IActivityLogService, Backend.Services.ActivityLogService>();
 builder.Services.AddScoped<Backend.Services.IAnalyticsService, Backend.Services.AnalyticsService>();
 builder.Services.AddScoped<Backend.Services.IVendorPerformanceService, Backend.Services.VendorPerformanceService>();
+builder.Services.AddScoped<Backend.Services.IVendorRatingService, Backend.Services.VendorRatingService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -148,12 +178,25 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Seed/repair initial authentication data on startup
-using (var scope = app.Services.CreateScope())
+// Seed/repair initial authentication data in background without blocking server startup
+_ = Task.Run(async () =>
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DbInitializer.SeedAsync(dbContext, logger);
-}
+    try
+    {
+        await Task.Delay(2500);
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        await DbInitializer.SeedAsync(dbContext, logger);
+    }
+    catch (ObjectDisposedException)
+    {
+        // Host shut down before/during seeding; ignore cleanly.
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[DbInitializer Background Error]: {ex.Message}");
+    }
+});
 
 app.Run();

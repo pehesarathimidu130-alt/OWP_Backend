@@ -50,10 +50,13 @@ namespace Backend.Controllers
                     query = query.Where(vs => vs.Status == status);
                 }
 
-                // Filter by category name
-                if (!string.IsNullOrWhiteSpace(category) && category != "All")
+                // Filter by category name (supports CSV vendor categories)
+                if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(vs => vs.Category != null && vs.Category.CategoryName == category);
+                    var catLower = category.Trim().ToLower();
+                    query = query.Where(vs =>
+                        (vs.Category != null && vs.Category.CategoryName.ToLower().Contains(catLower)) ||
+                        (vs.Vendor != null && vs.Vendor.Category != null && vs.Vendor.Category.ToLower().Contains(catLower)));
                 }
 
                 // Search by vendor business name or city/address
@@ -72,6 +75,18 @@ namespace Backend.Controllers
                 var items = await query
                     .OrderByDescending(vs => vs.CreatedAt)
                     .ToListAsync();
+
+                // Post-query exact token membership check for CSV categories
+                if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+                {
+                    var catTrimmed = category.Trim();
+                    items = items.Where(vs =>
+                        (vs.Category != null && vs.Category.CategoryName.Equals(catTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+                        (vs.Vendor?.Category != null && vs.Vendor.Category
+                            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                            .Any(c => c.Equals(catTrimmed, StringComparison.OrdinalIgnoreCase)))
+                    ).ToList();
+                }
 
                 var listings = items.Select(vs => MapToSummary(vs)).ToList();
 

@@ -15,5 +15,10 @@ namespace Backend.Services
         /// The User must already have its Role navigation loaded or the RoleId set to the Vendor role.
         /// </summary>
         LoginResponseDto BuildVendorLoginResponse(Entities.User user);
+
+        /// <summary>
+        /// Logs an admin logout audit event.
+        /// </summary>
+        Task LogoutAsync(int userId);
     }
 }

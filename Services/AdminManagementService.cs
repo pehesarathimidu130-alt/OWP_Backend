@@ -1,3 +1,4 @@
+using Backend.Constants;
 using Backend.Data;
 using Backend.DTOs;
 using Backend.Entities;
@@ -10,11 +11,16 @@ namespace Backend.Services
     public class AdminManagementService : IAdminManagementService
     {
         private readonly AppDbContext _context;
+        private readonly IActivityLogService _activityLogService;
         private readonly ILogger<AdminManagementService> _logger;
 
-        public AdminManagementService(AppDbContext context, ILogger<AdminManagementService> logger)
+        public AdminManagementService(
+            AppDbContext context,
+            IActivityLogService activityLogService,
+            ILogger<AdminManagementService> logger)
         {
             _context = context;
+            _activityLogService = activityLogService;
             _logger = logger;
         }
 
@@ -181,64 +187,76 @@ namespace Backend.Services
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
             var pinHash = BCrypt.Net.BCrypt.HashPassword(rawPin);
 
-            // 5. Persist User and Admin within a database transaction
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            // 5. Persist User and Admin within a database transaction using execution strategy
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var fullName = $"{request.FirstName} {request.LastName}".Trim();
-                var phoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-                var newUser = new User
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    FullName = fullName,
-                    Email = normalizedEmail,
-                    PhoneNumber = phoneNumber,
-                    PasswordHash = passwordHash,
-                    RoleId = role.RoleId,
-                    IsActive = true
-                };
+                    var fullName = $"{request.FirstName} {request.LastName}".Trim();
+                    var phoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+                    var newUser = new User
+                    {
+                        FullName = fullName,
+                        Email = normalizedEmail,
+                        PhoneNumber = phoneNumber,
+                        PasswordHash = passwordHash,
+                        RoleId = role.RoleId,
+                        IsActive = true
+                    };
 
-                _context.Users.Add(newUser);
-                await _context.SaveChangesAsync();
+                    _context.Users.Add(newUser);
+                    await _context.SaveChangesAsync();
 
-                var accessLevel = isSuperAdmin ? "SuperAdmin" : "Admin";
-                var department = string.IsNullOrWhiteSpace(request.Department) ? "Administration" : request.Department.Trim();
+                    var accessLevel = isSuperAdmin ? "SuperAdmin" : "Admin";
+                    var department = string.IsNullOrWhiteSpace(request.Department) ? "Administration" : request.Department.Trim();
 
-                var newAdmin = new Admin
+                    var newAdmin = new Admin
+                    {
+                        UserId = newUser.UserId,
+                        FirstName = request.FirstName.Trim(),
+                        LastName = request.LastName.Trim(),
+                        PhoneNumber = phoneNumber,
+                        Department = department,
+                        AccessLevel = accessLevel,
+                        SecurePinHash = pinHash // ONLY hashed PIN is saved in DB
+                    };
+
+                    _context.Admins.Add(newAdmin);
+                    await _context.SaveChangesAsync();
+
+                    await _activityLogService.LogAsync(
+                        ActivityLogTypes.AdminAccountCreated,
+                        "Admin",
+                        newAdmin.AdminId.ToString(),
+                        $"Created administrator '{fullName}' with role '{accessLevel}' (Email: {newUser.Email}).",
+                        saveChanges: true);
+
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation(
+                        "AdminManagement: Created new {AccessLevel} '{FullName}' ({Email}) with AdminId {AdminId}. Stored BCrypt SecurePinHash.",
+                        accessLevel, fullName, newUser.Email, newAdmin.AdminId);
+
+                    return new CreateAdminResponseDto
+                    {
+                        AdminId = newAdmin.AdminId,
+                        FullName = fullName,
+                        Email = newUser.Email,
+                        Role = accessLevel,
+                        PhoneNumber = newAdmin.PhoneNumber,
+                        GeneratedPin = rawPin, // Returned ONCE for Super Admin display
+                        CreatedAt = newAdmin.CreatedAt
+                    };
+                }
+                catch (Exception ex)
                 {
-                    UserId = newUser.UserId,
-                    FirstName = request.FirstName.Trim(),
-                    LastName = request.LastName.Trim(),
-                    PhoneNumber = phoneNumber,
-                    Department = department,
-                    AccessLevel = accessLevel,
-                    SecurePinHash = pinHash // ONLY hashed PIN is saved in DB
-                };
-
-                _context.Admins.Add(newAdmin);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                _logger.LogInformation(
-                    "AdminManagement: Created new {AccessLevel} '{FullName}' ({Email}) with AdminId {AdminId}. Stored BCrypt SecurePinHash.",
-                    accessLevel, fullName, newUser.Email, newAdmin.AdminId);
-
-                return new CreateAdminResponseDto
-                {
-                    AdminId = newAdmin.AdminId,
-                    FullName = fullName,
-                    Email = newUser.Email,
-                    Role = accessLevel,
-                    PhoneNumber = newAdmin.PhoneNumber,
-                    GeneratedPin = rawPin, // Returned ONCE for Super Admin display
-                    CreatedAt = newAdmin.CreatedAt
-                };
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "AdminManagement: Error occurred while creating admin {Email}", request.Email);
-                throw;
-            }
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "AdminManagement: Error occurred while creating admin {Email}", request.Email);
+                    throw;
+                }
+            });
         }
 
         /// <summary>
@@ -258,6 +276,8 @@ namespace Backend.Services
             var isSuperAdmin = request.AccessLevel.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
                                request.AccessLevel.Equals("SUPER_ADMIN", StringComparison.OrdinalIgnoreCase);
             var normalizedAccessLevel = isSuperAdmin ? "SuperAdmin" : "Admin";
+            var oldAccessLevel = admin.AccessLevel;
+            var roleChanged = !oldAccessLevel.Equals(normalizedAccessLevel, StringComparison.OrdinalIgnoreCase);
 
             // Update user record
             var fullName = $"{request.FirstName} {request.LastName}".Trim();
@@ -294,6 +314,26 @@ namespace Backend.Services
             {
                 newPin = RandomNumberGenerator.GetInt32(1000, 10000).ToString();
                 admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
+            }
+
+            if (roleChanged)
+            {
+                await _activityLogService.LogAsync(
+                    ActivityLogTypes.AdminRoleChanged,
+                    "Admin",
+                    admin.AdminId.ToString(),
+                    $"Updated access level for '{fullName}' from '{oldAccessLevel}' to '{normalizedAccessLevel}'.",
+                    saveChanges: false);
+            }
+
+            if (request.RegeneratePin)
+            {
+                await _activityLogService.LogAsync(
+                    ActivityLogTypes.AdminPinChanged,
+                    "Admin",
+                    admin.AdminId.ToString(),
+                    $"Regenerated security PIN for administrator '{fullName}'.",
+                    saveChanges: false);
             }
 
             await _context.SaveChangesAsync();
@@ -336,11 +376,18 @@ namespace Backend.Services
             admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
             admin.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
-
             var fullName = !string.IsNullOrWhiteSpace(admin.FullName)
                 ? admin.FullName
                 : (admin.User?.FullName ?? "Admin");
+
+            await _activityLogService.LogAsync(
+                ActivityLogTypes.AdminPinChanged,
+                "Admin",
+                admin.AdminId.ToString(),
+                $"Regenerated security PIN for administrator '{fullName}'.",
+                saveChanges: false);
+
+            await _context.SaveChangesAsync();
 
             _logger.LogInformation("AdminManagement: Regenerated PIN for admin {AdminId} ({FullName}). Stored new SecurePinHash.",
                 id, fullName);
@@ -386,6 +433,18 @@ namespace Backend.Services
             }
 
             var linkedUser = admin.User;
+            var adminFullName = !string.IsNullOrWhiteSpace(admin.FullName)
+                ? admin.FullName
+                : (linkedUser?.FullName ?? "Admin");
+            var adminEmail = linkedUser?.Email ?? "Unknown";
+
+            await _activityLogService.LogAsync(
+                ActivityLogTypes.AdminAccountDeleted,
+                "Admin",
+                admin.AdminId.ToString(),
+                $"Deleted administrator account '{adminFullName}' (Email: {adminEmail}).",
+                saveChanges: false);
+
             _context.Admins.Remove(admin);
             if (linkedUser != null)
             {
@@ -494,6 +553,14 @@ namespace Backend.Services
             admin.SecurePinHash = BCrypt.Net.BCrypt.HashPassword(newPin);
             admin.UpdatedAt = DateTime.UtcNow;
 
+            await _activityLogService.LogAsync(
+                ActivityLogTypes.AdminPinChanged,
+                "Admin",
+                admin.AdminId.ToString(),
+                "Updated security PIN.",
+                actingAdminId: admin.AdminId,
+                saveChanges: false);
+
             await _context.SaveChangesAsync();
             return true;
         }
@@ -507,6 +574,16 @@ namespace Backend.Services
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.UpdatedAt = DateTime.UtcNow;
+
+            var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == userId || a.AdminId == userId);
+            await _activityLogService.LogAsync(
+                ActivityLogTypes.AdminPasswordChanged,
+                "Admin",
+                admin?.AdminId.ToString() ?? userId.ToString(),
+                "Changed account password.",
+                actingAdminId: admin?.AdminId,
+                saveChanges: false);
+
             await _context.SaveChangesAsync();
             return true;
         }

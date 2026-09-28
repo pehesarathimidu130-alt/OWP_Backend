@@ -41,9 +41,42 @@ namespace Backend.Data
         public DbSet<ListingView> ListingViews { get; set; } = null!;
         public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
         public DbSet<VendorInquiry> VendorInquiries { get; set; } = null!;
+        public DbSet<VendorRating> VendorRatings { get; set; } = null!;
+        public DbSet<ActivityLog> ActivityLogs { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // ActivityLogs Relationships and Indexes
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.Timestamp);
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.ActingAdminId);
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasOne(a => a.ActingAdmin)
+                .WithMany()
+                .HasForeignKey(a => a.ActingAdminId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Unique index on VendorRatings (VendorId, CustomerId) — one rating per customer per vendor
+            modelBuilder.Entity<VendorRating>()
+                .HasIndex(vr => new { vr.VendorId, vr.CustomerId })
+                .IsUnique();
+
+            modelBuilder.Entity<VendorRating>()
+                .HasOne(vr => vr.Vendor)
+                .WithMany(v => v.Ratings)
+                .HasForeignKey(vr => vr.VendorId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorRating>()
+                .HasOne(vr => vr.Customer)
+                .WithMany()
+                .HasForeignKey(vr => vr.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
             
             // Unique index on Users.Email
             modelBuilder.Entity<User>()

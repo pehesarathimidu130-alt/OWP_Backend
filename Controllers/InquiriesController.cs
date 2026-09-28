@@ -45,19 +45,31 @@ namespace Backend.Controllers
         /// POST /api/inquiries
         /// Submits a new inquiry with optional photo attachment via multipart/form-data.
         /// </summary>
-        [HttpPost]
-        [Consumes("multipart/form-data", "application/json")]
-        public async Task<IActionResult> CreateInquiry(
-            [FromForm] int? vendorId,
-            [FromForm] int? serviceId,
-            [FromForm] DateTime? weddingDate,
-            [FromForm] int? guestCount,
-            [FromForm] decimal? budget,
-            [FromForm] string? message,
-            [FromForm] IFormFile? photo,
-            [FromForm] IFormFile? attachment,
-            [FromForm] IFormFile? image)
+        public class CreateInquiryRequest
         {
+            public int? VendorId { get; set; }
+            public int? ServiceId { get; set; }
+            public DateTime? WeddingDate { get; set; }
+            public int? GuestCount { get; set; }
+            public decimal? Budget { get; set; }
+            public string? Message { get; set; }
+            public IFormFile? Photo { get; set; }
+            public IFormFile? Attachment { get; set; }
+            public IFormFile? Image { get; set; }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateInquiry([FromForm] CreateInquiryRequest request)
+        {
+            var vendorId = request.VendorId;
+            var serviceId = request.ServiceId;
+            var weddingDate = request.WeddingDate;
+            var guestCount = request.GuestCount;
+            var budget = request.Budget;
+            var message = request.Message;
+            var photo = request.Photo;
+            var attachment = request.Attachment;
+            var image = request.Image;
             var userId = GetCurrentUserId();
             var customer = userId.HasValue
                 ? await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId.Value)

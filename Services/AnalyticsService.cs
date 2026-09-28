@@ -99,12 +99,16 @@ namespace Backend.Services
                     {
                         Label = cat,
                         Count = vendors.Count(v =>
-                            (v.Category ?? "").Equals(cat, StringComparison.OrdinalIgnoreCase)),
+                            (v.Category ?? string.Empty)
+                                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                                .Any(c => c.Equals(cat, StringComparison.OrdinalIgnoreCase))),
                     }).ToList();
 
                 var otherCount = vendors.Count(v =>
                     !string.IsNullOrWhiteSpace(v.Category) &&
-                    !KnownCategories.Any(k => k.Equals(v.Category, StringComparison.OrdinalIgnoreCase)));
+                    !v.Category
+                        .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Any(c => KnownCategories.Any(k => k.Equals(c, StringComparison.OrdinalIgnoreCase))));
                 if (otherCount > 0)
                     categoryBreakdown.Add(new AnalyticsLabelCountDto { Label = "Other", Count = otherCount });
 
