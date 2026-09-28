@@ -127,7 +127,6 @@ namespace Backend.Controllers
         {
             try
             {
-                // Try finding in Customers table
                 var customer = await _context.Customers
                     .Include(c => c.User)
                     .FirstOrDefaultAsync(c => c.CustomerId == id);
