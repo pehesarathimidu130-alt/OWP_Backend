@@ -221,7 +221,6 @@ namespace Backend.Services
                 string passwordHash;
                 if (isGoogleFlow)
                 {
-                    // 32 cryptographically random bytes → BCrypt hash → account cannot be entered via password form
                     var randomBytes = RandomNumberGenerator.GetBytes(32);
                     passwordHash = BCrypt.Net.BCrypt.HashPassword(Convert.ToBase64String(randomBytes));
                 }
@@ -279,7 +278,6 @@ namespace Backend.Services
                     Country = "Sri Lanka",
                     ServiceAreas = string.Join(", ", serviceAreas),
                     TermsAcceptedAt = DateTime.UtcNow,
-                    // System-set pending values
                     IsApproved = false,
                     Status = "Pending",
                     VerificationStatus = "Pending"
@@ -288,7 +286,7 @@ namespace Backend.Services
                 _context.Vendors.Add(vendor);
                 await _context.SaveChangesAsync();
 
-                // Notify all admins (uses its own SaveChangesAsync internally, but participates in our transaction)
+                // Notify all admins
                 await _notificationService.CreateForAllAdminsAsync(
                     NotificationTypes.VendorRegistered,
                     "New vendor registration",
@@ -300,12 +298,11 @@ namespace Backend.Services
                     "Vendor registered successfully ({Flow}): UserId={UserId}, BusinessName={BusinessName}",
                     isGoogleFlow ? "Google" : "Password", user.UserId, businessName);
 
-                // ── 6. Build login response (after commit, so UserId is final) ──
+                // ── 6. Build login response ──
                 return _authService.BuildVendorLoginResponse(user);
             }
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                // Race condition: another request inserted the same email or Google sub between our check and insert
                 await transaction.RollbackAsync();
                 throw new DuplicateEmailException(email);
             }
@@ -339,17 +336,11 @@ namespace Backend.Services
 
         private static bool IsUniqueConstraintViolation(DbUpdateException ex)
         {
-            // PostgreSQL error code 23505 = unique_violation
             var inner = ex.InnerException;
             return inner != null && inner.Message.Contains("23505");
         }
     }
 
-    // ── Custom exception types for the controller to map to HTTP responses ──
-
-    /// <summary>
-    /// Thrown when service-level validation fails (multiple field errors).
-    /// </summary>
     public class ValidationException : Exception
     {
         public Dictionary<string, string[]> Errors { get; }
@@ -360,9 +351,6 @@ namespace Backend.Services
         }
     }
 
-    /// <summary>
-    /// Thrown when the email is already registered (409 Conflict).
-    /// </summary>
     public class DuplicateEmailException : Exception
     {
         public string EmailAddress { get; }

@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928102259_AddFlaggedContentTable")]
+    partial class AddFlaggedContentTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -74,37 +77,6 @@ namespace Backend.Migrations
                         .IsUnique();
 
                     b.ToTable("Admins");
-                });
-
-            modelBuilder.Entity("Backend.Entities.AiSuggestionLog", b =>
-                {
-                    b.Property<long>("SuggestionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SuggestionId"));
-
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Reasoning")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("SuggestedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("SuggestionId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("ServiceId", "SuggestedAt");
-
-                    b.ToTable("AiSuggestionLogs");
                 });
 
             modelBuilder.Entity("Backend.Entities.Category", b =>
@@ -263,41 +235,6 @@ namespace Backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("Backend.Entities.CustomerFavorite", b =>
-                {
-                    b.Property<int>("FavoriteId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("FavoriteId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("FavoriteId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("ServiceId");
-
-                    b.HasIndex("UserId", "ServiceId")
-                        .IsUnique();
-
-                    b.ToTable("CustomerFavorites");
                 });
 
             modelBuilder.Entity("Backend.Entities.DecorationsDetails", b =>
@@ -572,38 +509,6 @@ namespace Backend.Migrations
                     b.ToTable("HotelVenueDetails");
                 });
 
-            modelBuilder.Entity("Backend.Entities.ListingView", b =>
-                {
-                    b.Property<long>("ViewId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ViewId"));
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("ViewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ViewId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("ViewedAt");
-
-                    b.HasIndex("ServiceId", "ViewedAt");
-
-                    b.ToTable("ListingViews");
-                });
-
             modelBuilder.Entity("Backend.Entities.MusicDetails", b =>
                 {
                     b.Property<int>("ServiceId")
@@ -864,43 +769,6 @@ namespace Backend.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Backend.Entities.UserExternalLogin", b =>
-                {
-                    b.Property<int>("UserExternalLoginId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserExternalLoginId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("ProviderSubject")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("UserExternalLoginId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Provider", "ProviderSubject")
-                        .IsUnique();
-
-                    b.ToTable("UserExternalLogins");
-                });
-
             modelBuilder.Entity("Backend.Entities.Vendor", b =>
                 {
                     b.Property<int>("VendorId")
@@ -925,14 +793,6 @@ namespace Backend.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
-
-                    b.Property<string>("BusinessRegistrationNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("BusinessType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
@@ -1000,9 +860,6 @@ namespace Backend.Migrations
                     b.Property<string>("Tagline")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
-
-                    b.Property<DateTime?>("TermsAcceptedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("TravelPolicy")
                         .HasMaxLength(500)
@@ -1367,25 +1224,6 @@ namespace Backend.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Backend.Entities.AiSuggestionLog", b =>
-                {
-                    b.HasOne("Backend.Entities.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Entities.VendorService", "VendorService")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("VendorService");
-                });
-
             modelBuilder.Entity("Backend.Entities.CateringDetails", b =>
                 {
                     b.HasOne("Backend.Entities.VendorService", "VendorService")
@@ -1408,31 +1246,6 @@ namespace Backend.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Backend.Entities.CustomerFavorite", b =>
-                {
-                    b.HasOne("Backend.Entities.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId");
-
-                    b.HasOne("Backend.Entities.VendorService", "VendorService")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("User");
-
-                    b.Navigation("VendorService");
-                });
-
             modelBuilder.Entity("Backend.Entities.DecorationsDetails", b =>
                 {
                     b.HasOne("Backend.Entities.VendorService", "VendorService")
@@ -1451,23 +1264,6 @@ namespace Backend.Migrations
                         .HasForeignKey("Backend.Entities.HotelVenueDetails", "ServiceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("VendorService");
-                });
-
-            modelBuilder.Entity("Backend.Entities.ListingView", b =>
-                {
-                    b.HasOne("Backend.Entities.VendorService", "VendorService")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("User");
 
                     b.Navigation("VendorService");
                 });
@@ -1514,17 +1310,6 @@ namespace Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("Backend.Entities.UserExternalLogin", b =>
-                {
-                    b.HasOne("Backend.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Backend.Entities.Vendor", b =>
