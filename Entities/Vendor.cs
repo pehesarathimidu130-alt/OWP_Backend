@@ -30,6 +30,11 @@ namespace Backend.Entities
         [MaxLength(50)]
         public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
 
+        [MaxLength(500)]
+        public string? StatusChangeReason { get; set; }
+
+        public DateTime? StatusChangedAt { get; set; }
+
         [MaxLength(100)]
         public string? Category { get; set; }
 
@@ -89,6 +94,7 @@ namespace Backend.Entities
         public ICollection<VendorGalleryImage> GalleryImages { get; set; } = new List<VendorGalleryImage>();
         public ICollection<VendorDocument> Documents { get; set; } = new List<VendorDocument>();
         public ICollection<VendorService> VendorServices { get; set; } = new List<VendorService>();
+        public ICollection<VendorRating> Ratings { get; set; } = new List<VendorRating>();
 
         [MaxLength(50)]
         public string? BusinessType { get; set; }

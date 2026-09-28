@@ -10,6 +10,8 @@ namespace Backend.DTOs
         public string Phone { get; set; } = string.Empty;
         public string Category { get; set; } = "General";
         public string Status { get; set; } = "Pending";
+        public string? StatusChangeReason { get; set; }
+        public string? StatusChangedAt { get; set; }
         public string? BusinessAddress { get; set; }
         public string? City { get; set; }
         public string? TaxId { get; set; }
@@ -28,14 +30,22 @@ namespace Backend.DTOs
         public decimal Revenue { get; set; }
         public string? Description { get; set; }
         public string? WhyApplied { get; set; }
+        public string? LogoUrl { get; set; }
+        public string? CoverImageUrl { get; set; }
+        public string? ImageUrl { get; set; }
         public List<VendorDocDto> VerificationDocs { get; set; } = new();
     }
 
     public class VendorDocDto
     {
+        public int DocumentId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string DocumentType { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
         public string Type { get; set; } = "pdf";
         public string? Url { get; set; }
+        public string? UploadDate { get; set; }
+        public string? Status { get; set; }
     }
 
     public class UpdateVendorStatusDto
@@ -57,5 +67,6 @@ namespace Backend.DTOs
         public int? YearsInBusiness { get; set; }
         public string? Description { get; set; }
         public string? Status { get; set; }
+        public string? Reason { get; set; }
     }
 }

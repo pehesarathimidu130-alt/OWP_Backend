@@ -22,5 +22,18 @@ namespace Backend.Entities
         [Required]
         [MaxLength(50)]
         public string LastName { get; set; } = string.Empty;
+
+        [NotMapped]
+        public bool IsActive
+        {
+            get => User?.IsActive ?? true;
+            set
+            {
+                if (User != null)
+                {
+                    User.IsActive = value;
+                }
+            }
+        }
     }
 }

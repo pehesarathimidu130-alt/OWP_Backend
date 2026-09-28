@@ -82,6 +82,7 @@ namespace Backend.Controllers
                     var catLower = category.ToLower().Trim();
                     query = query.Where(vs =>
                         (vs.Category != null && vs.Category.CategoryName.ToLower().Contains(catLower)) ||
+                        (vs.Vendor != null && vs.Vendor.Category != null && vs.Vendor.Category.ToLower().Contains(catLower)) ||
                         vs.ServiceName.ToLower().Contains(catLower));
                 }
 
@@ -100,6 +101,19 @@ namespace Backend.Controllers
                 var services = await query
                     .OrderByDescending(vs => vs.CreatedAt)
                     .ToListAsync();
+
+                // Post-query exact token membership check for CSV categories
+                if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+                {
+                    var catTrimmed = category.Trim();
+                    services = services.Where(vs =>
+                        (vs.Category != null && vs.Category.CategoryName.Equals(catTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+                        (vs.Vendor?.Category != null && vs.Vendor.Category
+                            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                            .Any(c => c.Equals(catTrimmed, StringComparison.OrdinalIgnoreCase))) ||
+                        vs.ServiceName.Contains(catTrimmed, StringComparison.OrdinalIgnoreCase)
+                    ).ToList();
+                }
 
                 var result = services.Select(vs =>
                 {
@@ -255,7 +269,8 @@ namespace Backend.Controllers
         private static string GetCategoryIcon(string? category)
         {
             if (string.IsNullOrWhiteSpace(category)) return "sparkles";
-            var cat = category.ToLower();
+            var first = category.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? category;
+            var cat = first.ToLower();
             if (cat.Contains("venue") || cat.Contains("hotel")) return "location_city";
             if (cat.Contains("photo") || cat.Contains("video")) return "camera_alt";
             if (cat.Contains("music") || cat.Contains("dj") || cat.Contains("band")) return "music_note";

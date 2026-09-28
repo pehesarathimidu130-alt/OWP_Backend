@@ -1,11 +1,19 @@
+using Backend.Constants;
 using Backend.Data;
 using Backend.Entities;
+using Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Controllers
 {
+    public class ToggleCustomerStatusDto
+    {
+        public bool? IsActive { get; set; }
+        public string? Reason { get; set; }
+    }
+
     [ApiController]
     [Route("api/customers")]
     [Route("api/customer-management")]
@@ -14,11 +22,16 @@ namespace Backend.Controllers
     public class CustomerManagementController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IActivityLogService _activityLogService;
         private readonly ILogger<CustomerManagementController> _logger;
 
-        public CustomerManagementController(AppDbContext context, ILogger<CustomerManagementController> logger)
+        public CustomerManagementController(
+            AppDbContext context,
+            IActivityLogService activityLogService,
+            ILogger<CustomerManagementController> logger)
         {
             _context = context;
+            _activityLogService = activityLogService;
             _logger = logger;
         }
 
@@ -43,7 +56,7 @@ namespace Backend.Controllers
                         email = c.User != null ? c.User.Email : string.Empty,
                         phoneNumber = c.User != null ? c.User.PhoneNumber : null,
                         phone = c.User != null ? (c.User.PhoneNumber ?? "N/A") : "N/A",
-                        status = c.User != null && c.User.IsActive ? "Active" : "Inactive",
+                        status = (c.User != null && c.User.IsActive) ? "Active" : "Inactive",
                         joinDate = c.CreatedAt.ToString("MMM dd, yyyy"),
                         weddingDate = _context.VendorInquiries
                             .Where(vi => vi.CustomerId == c.CustomerId || vi.UserId == c.UserId)
@@ -239,6 +252,64 @@ namespace Backend.Controllers
             {
                 _logger.LogError(ex, "Failed to delete customer with ID {Id}.", id);
                 return StatusCode(500, new { message = "An error occurred while deleting the customer." });
+            }
+        }
+
+        // PATCH: /api/customers/{id}/status or /api/customer-management/{id}/status
+        [HttpPatch("{id:int}/status")]
+        [HttpPut("{id:int}/status")]
+        public async Task<IActionResult> ToggleCustomerStatus(int id, [FromBody] ToggleCustomerStatusDto? request = null)
+        {
+            try
+            {
+                var customer = await _context.Customers
+                    .Include(c => c.User)
+                    .FirstOrDefaultAsync(c => c.CustomerId == id);
+
+                var user = customer?.User ?? await _context.Users.FirstOrDefaultAsync(u => u.UserId == id);
+
+                if (user == null)
+                {
+                    return NotFound(new { message = $"Customer with ID {id} was not found." });
+                }
+
+                var oldStatus = user.IsActive;
+                var newStatus = request?.IsActive ?? !oldStatus;
+                user.IsActive = newStatus;
+                user.UpdatedAt = DateTime.UtcNow;
+
+                if (customer != null)
+                {
+                    customer.IsActive = newStatus;
+                    customer.UpdatedAt = DateTime.UtcNow;
+                }
+
+                var reasonText = !string.IsNullOrWhiteSpace(request?.Reason) ? request.Reason.Trim() : "Admin status toggle";
+                var customerName = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : "Customer";
+
+                await _activityLogService.LogAsync(
+                    ActivityLogTypes.CustomerStatusToggled,
+                    "Customer",
+                    (customer?.CustomerId ?? user.UserId).ToString(),
+                    $"Customer '{customerName}' ({user.Email}) status toggled from {(oldStatus ? "Active" : "Inactive")} to {(newStatus ? "Active" : "Inactive")}. Reason: {reasonText}",
+                    saveChanges: false);
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Customer #{Id} status toggled to {Status} by admin. Reason: {Reason}", id, newStatus ? "Active" : "Inactive", reasonText);
+
+                return Ok(new
+                {
+                    message = $"Customer status updated to {(newStatus ? "Active" : "Inactive")}.",
+                    customerId = customer?.CustomerId ?? user.UserId,
+                    isActive = newStatus,
+                    status = newStatus ? "Active" : "Inactive"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to toggle customer status for ID {Id}.", id);
+                return StatusCode(500, new { message = "An error occurred while updating customer status." });
             }
         }
     }

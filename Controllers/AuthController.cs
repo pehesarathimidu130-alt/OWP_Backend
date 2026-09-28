@@ -60,5 +60,21 @@ namespace Backend.Controllers
                 );
             }
         }
+
+        /// <summary>
+        /// POST /api/auth/logout
+        /// Logs out the user and records an audit log entry for admins.
+        /// </summary>
+        [HttpPost("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(userIdClaim, out var userId))
+            {
+                await _authService.LogoutAsync(userId);
+            }
+            return Ok(new { message = "Logged out successfully." });
+        }
     }
 }

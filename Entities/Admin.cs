@@ -39,5 +39,14 @@ namespace Backend.Entities
         [Required]
         [MaxLength(255)]
         public string SecurePinHash { get; set; } = string.Empty; // BCrypt-hashed 4-digit PIN (No plaintext stored)
+
+        [MaxLength(500)]
+        public string? ProfilePictureUrl { get; set; }
+
+        public bool NotifyNewVendorPending { get; set; } = true;
+        public bool NotifyFlaggedContent { get; set; } = true;
+        public bool NotifyCustomerComplaint { get; set; } = true;
+        public bool NotifyAiWorkflowApproval { get; set; } = false;
+        public bool NotifyWeeklySummary { get; set; } = true;
     }
 }

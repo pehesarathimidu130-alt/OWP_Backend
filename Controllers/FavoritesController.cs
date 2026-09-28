@@ -271,7 +271,9 @@ namespace Backend.Controllers
 
         private static string GetCategoryIcon(string category)
         {
-            return category.ToLower() switch
+            if (string.IsNullOrWhiteSpace(category)) return "category_rounded";
+            var first = category.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? category;
+            return first.ToLower() switch
             {
                 "hotel / venue" => "castle_rounded",
                 "photography" => "photo_camera_rounded",

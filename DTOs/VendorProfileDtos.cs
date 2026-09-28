@@ -163,6 +163,8 @@ namespace Backend.DTOs
         public string? LogoUrl { get; set; }
         public string? CoverImageUrl { get; set; }
         public string Location { get; set; } = "Sri Lanka";
+        public double AverageRating { get; set; }
+        public int RatingCount { get; set; }
         public int ReviewCount { get; set; }
         public List<BusinessHoursItemDto> BusinessHours { get; set; } = new();
         public SocialLinksDto SocialLinks { get; set; } = new();

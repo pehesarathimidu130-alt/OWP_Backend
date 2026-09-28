@@ -1,3 +1,4 @@
+using Backend.Constants;
 using Backend.Data;
 using Backend.DTOs;
 using Backend.Entities;
@@ -13,12 +14,18 @@ namespace Backend.Services
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IActivityLogService _activityLogService;
         private readonly ILogger<AuthService> _logger;
 
-        public AuthService(AppDbContext context, IConfiguration configuration, ILogger<AuthService> logger)
+        public AuthService(
+            AppDbContext context,
+            IConfiguration configuration,
+            IActivityLogService activityLogService,
+            ILogger<AuthService> logger)
         {
             _context = context;
             _configuration = configuration;
+            _activityLogService = activityLogService;
             _logger = logger;
         }
 
@@ -65,6 +72,7 @@ namespace Backend.Services
             var roleName = user.Role?.RoleName ?? "Unknown";
 
             // ── 5. Admin-specific validation ──
+            Entities.Admin? admin = null;
             if (request.IsAdmin)
             {
                 // The user must actually have an Admin role
@@ -83,7 +91,7 @@ namespace Backend.Services
                 }
 
                 // Verify the PIN against Admins table SecurePinHash (BCrypt)
-                var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == user.UserId);
+                admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == user.UserId);
                 if (admin == null || string.IsNullOrEmpty(admin.SecurePinHash))
                 {
                     _logger.LogWarning("Login failed: no Admin record or SecurePinHash found for UserId {UserId}", user.UserId);
@@ -131,6 +139,17 @@ namespace Backend.Services
             // ── 7. Generate JWT token ──
             var token = GenerateJwtToken(user, normalizedRole);
 
+            if (request.IsAdmin && admin != null)
+            {
+                await _activityLogService.LogAsync(
+                    ActivityLogTypes.AdminLogin,
+                    "Admin",
+                    admin.AdminId.ToString(),
+                    $"Administrator '{user.FullName}' ({user.Email}) logged in.",
+                    actingAdminId: admin.AdminId,
+                    saveChanges: true);
+            }
+
             _logger.LogInformation("User {UserId} ({Role}) logged in successfully", user.UserId, normalizedRole);
 
             return new LoginResponseDto
@@ -139,8 +158,28 @@ namespace Backend.Services
                 Role = normalizedRole,
                 FullName = user.FullName,
                 Email = user.Email,
-                UserId = user.UserId
+                UserId = user.UserId,
+                ProfilePictureUrl = admin?.ProfilePictureUrl
             };
+        }
+
+        public async Task LogoutAsync(int userId)
+        {
+            var admin = await _context.Admins
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.UserId == userId || a.AdminId == userId);
+
+            if (admin != null)
+            {
+                var fullName = !string.IsNullOrWhiteSpace(admin.FullName) ? admin.FullName : (admin.User?.FullName ?? "Admin");
+                await _activityLogService.LogAsync(
+                    ActivityLogTypes.AdminLogout,
+                    "Admin",
+                    admin.AdminId.ToString(),
+                    $"Administrator '{fullName}' logged out.",
+                    actingAdminId: admin.AdminId,
+                    saveChanges: true);
+            }
         }
 
         public LoginResponseDto BuildVendorLoginResponse(User user)
