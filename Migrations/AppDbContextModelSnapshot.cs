@@ -1481,6 +1481,8 @@ namespace Backend.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("ActingAdmin");
+                });
+
             modelBuilder.Entity("Backend.Models.FlaggedContent", b =>
                 {
                     b.Property<int>("Id")
