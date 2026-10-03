@@ -16,11 +16,19 @@ namespace Backend.Services
             _context = context;
         }
 
-        public async Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId)
+        public async Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId, int? page = null, int? pageSize = null)
         {
-            var notifications = await _context.Notifications
+            var query = _context.Notifications
                 .Where(n => n.UserId == userId)
-                .OrderByDescending(n => n.CreatedAt)
+                .OrderByDescending(n => n.CreatedAt);
+
+            IQueryable<Entities.Notification> pagedQuery = query;
+            if (page.HasValue && pageSize.HasValue && page.Value > 0 && pageSize.Value > 0)
+            {
+                pagedQuery = query.Skip((page.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            }
+
+            var notifications = await pagedQuery
                 .Select(n => new NotificationResponseDto
                 {
                     NotificationId = n.NotificationId,
@@ -33,6 +41,12 @@ namespace Backend.Services
                 .ToListAsync();
 
             return notifications;
+        }
+
+        public async Task<int> GetUnreadCountAsync(int userId)
+        {
+            return await _context.Notifications
+                .CountAsync(n => n.UserId == userId && !n.IsRead);
         }
 
         public async Task<bool> MarkAsReadAsync(int userId, int notificationId)

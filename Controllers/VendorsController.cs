@@ -191,7 +191,8 @@ namespace Backend.Controllers
                     .ToListAsync();
 
                 var ratingSummary = await _ratingService.GetVendorRatingSummaryAsync(id);
-                return Ok(MapPublicProfile(vendor, performances, ratingSummary));
+                var isAuthenticated = User.Identity?.IsAuthenticated == true;
+                return Ok(MapPublicProfile(vendor, performances, ratingSummary, isAuthenticated));
             }
             catch (Exception ex)
             {
@@ -223,7 +224,11 @@ namespace Backend.Controllers
             PropertyNameCaseInsensitive = true
         };
 
-        private static PublicVendorProfileDto MapPublicProfile(Vendor vendor, List<VendorPerformance> performances, VendorRatingSummaryDto? ratingSummary = null)
+        private static PublicVendorProfileDto MapPublicProfile(
+            Vendor vendor,
+            List<VendorPerformance> performances,
+            VendorRatingSummaryDto? ratingSummary = null,
+            bool isAuthenticated = true)
         {
             var hours = new List<BusinessHoursItemDto>();
             if (!string.IsNullOrWhiteSpace(vendor.BusinessHoursJson))
@@ -268,10 +273,11 @@ namespace Backend.Controllers
                 Tagline = vendor.Tagline,
                 Description = vendor.Description,
                 OwnerName = vendor.OwnerName,
-                ContactNumber = vendor.ContactNumber,
-                AltPhoneNumber = vendor.AltPhoneNumber,
-                Email = vendor.Email,
-                WebsiteUrl = vendor.WebsiteUrl,
+                ContactNumber = isAuthenticated ? vendor.ContactNumber : null,
+                AltPhoneNumber = isAuthenticated ? vendor.AltPhoneNumber : null,
+                Email = isAuthenticated ? vendor.Email : null,
+                WebsiteUrl = isAuthenticated ? vendor.WebsiteUrl : null,
+                ContactHidden = isAuthenticated ? null : true,
                 Address = vendor.Address,
                 City = vendor.City,
                 State = vendor.State,

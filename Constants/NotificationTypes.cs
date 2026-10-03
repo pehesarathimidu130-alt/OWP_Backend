@@ -21,5 +21,7 @@ namespace Backend.Constants
         public const string ProfileUpdated = "ProfileUpdated";
         public const string AdminAccountCreated = "AdminAccountCreated";
         public const string AiApprovalRequired = "AiApprovalRequired";
+        public const string PriceUpdated = "PriceUpdated";
+        public const string InquiryStatusChanged = "InquiryStatusChanged";
     }
 }

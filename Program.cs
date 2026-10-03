@@ -86,6 +86,18 @@ builder.Services.AddScoped<Backend.Services.IAnalyticsService, Backend.Services.
 builder.Services.AddScoped<Backend.Services.IVendorPerformanceService, Backend.Services.VendorPerformanceService>();
 builder.Services.AddScoped<Backend.Services.IVendorRatingService, Backend.Services.VendorRatingService>();
 
+// Configure File Storage (Local or Supabase)
+builder.Services.AddHttpClient();
+var storageProvider = builder.Configuration.GetValue<string>("Storage:Provider") ?? "Local";
+if (storageProvider.Equals("Supabase", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<Backend.Services.IFileStorage, Backend.Services.SupabaseFileStorage>();
+}
+else
+{
+    builder.Services.AddScoped<Backend.Services.IFileStorage, Backend.Services.LocalFileStorage>();
+}
+
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings.GetValue<string>("SecretKey") ?? "PlaceholderSecretKeyForDevelopmentNeedsToBeLongerThan32Chars!";

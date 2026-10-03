@@ -19,10 +19,17 @@ namespace Backend.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetNotifications()
+        public async Task<IActionResult> GetNotifications([FromQuery] int? page = null, [FromQuery] int? pageSize = null)
         {
-            var notifications = await _service.GetNotificationsAsync(GetUserId());
+            var notifications = await _service.GetNotificationsAsync(GetUserId(), page, pageSize);
             return Ok(notifications);
+        }
+
+        [HttpGet("unread-count")]
+        public async Task<IActionResult> GetUnreadCount()
+        {
+            var count = await _service.GetUnreadCountAsync(GetUserId());
+            return Ok(new { count });
         }
 
         [HttpPatch("{id:int}/read")]

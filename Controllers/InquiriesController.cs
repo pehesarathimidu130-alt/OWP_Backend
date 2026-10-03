@@ -19,12 +19,12 @@ namespace Backend.Controllers
     public class InquiriesController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _env;
+        private readonly Backend.Services.IFileStorage _fileStorage;
 
-        public InquiriesController(AppDbContext context, IWebHostEnvironment env)
+        public InquiriesController(AppDbContext context, Backend.Services.IFileStorage fileStorage)
         {
             _context = context;
-            _env = env;
+            _fileStorage = fileStorage;
         }
 
         private int? GetCurrentUserId()
@@ -93,23 +93,9 @@ namespace Backend.Controllers
             {
                 try
                 {
-                    var webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                    var uploadsDir = Path.Combine(webRoot, "uploads", "inquiries");
-                    if (!Directory.Exists(uploadsDir))
-                    {
-                        Directory.CreateDirectory(uploadsDir);
-                    }
-
                     var extension = Path.GetExtension(file.FileName);
                     var uniqueFileName = $"inquiry_{Guid.NewGuid():N}{extension}";
-                    var filePath = Path.Combine(uploadsDir, uniqueFileName);
-
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await file.CopyToAsync(stream);
-                    }
-
-                    attachmentUrl = $"/uploads/inquiries/{uniqueFileName}";
+                    attachmentUrl = await _fileStorage.SaveAsync(file, "inquiries", uniqueFileName, file.ContentType);
                 }
                 catch (Exception ex)
                 {
@@ -243,11 +229,136 @@ namespace Backend.Controllers
                 return NotFound(new { message = "Inquiry not found." });
             }
 
+            if (!string.IsNullOrEmpty(inquiry.AttachmentUrl))
+            {
+                await _fileStorage.DeleteAsync(inquiry.AttachmentUrl);
+            }
+
             _context.VendorInquiries.Remove(inquiry);
             await _context.SaveChangesAsync();
 
             return Ok(new { success = true, message = "Inquiry deleted successfully." });
         }
+
+        /// <summary>
+        /// PATCH /api/inquiries/{id}/status
+        /// Updates an inquiry status. Allowed only for the owning vendor or an admin.
+        /// </summary>
+        [HttpPatch("{id:int}/status")]
+        public async Task<IActionResult> UpdateInquiryStatus(int id, [FromBody] UpdateInquiryStatusDto request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Status))
+            {
+                return BadRequest(new { message = "Status is required." });
+            }
+
+            var allowedStatuses = new[] { "Pending", "Responded", "Replied" };
+            var matchedStatus = allowedStatuses.FirstOrDefault(s => string.Equals(s, request.Status.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (matchedStatus == null)
+            {
+                return BadRequest(new { message = $"Invalid status '{request.Status}'. Allowed statuses are: {string.Join(", ", allowedStatuses)}." });
+            }
+
+            var inquiry = await _context.VendorInquiries
+                .Include(i => i.Vendor)
+                .FirstOrDefaultAsync(i => i.InquiryId == id);
+
+            if (inquiry == null)
+            {
+                return NotFound(new { message = $"Inquiry with ID {id} was not found." });
+            }
+
+            var callerUserId = GetCurrentUserId();
+            int? callerVendorId = null;
+            var vendorClaim = User.FindFirst("vendorId")?.Value ?? User.FindFirst("VendorId")?.Value;
+            if (int.TryParse(vendorClaim, out var vId))
+            {
+                callerVendorId = vId;
+            }
+            else if (callerUserId.HasValue)
+            {
+                var v = await _context.Vendors.FirstOrDefaultAsync(x => x.UserId == callerUserId.Value);
+                if (v != null) callerVendorId = v.VendorId;
+            }
+
+            bool isAdmin = User.IsInRole("Admin") ||
+                           string.Equals(User.FindFirstValue(ClaimTypes.Role), "Admin", StringComparison.OrdinalIgnoreCase);
+
+            if (!isAdmin && (!callerVendorId.HasValue || inquiry.VendorId != callerVendorId.Value))
+            {
+                return Forbid();
+            }
+
+            var oldStatus = inquiry.Status;
+            inquiry.Status = matchedStatus;
+            inquiry.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Customer notification on status change (if opted in)
+            if (!string.Equals(oldStatus, matchedStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    bool shouldNotify = true;
+                    if (inquiry.CustomerId.HasValue)
+                    {
+                        var pref = await _context.CustomerNotificationPreferences
+                            .FirstOrDefaultAsync(p => p.CustomerId == inquiry.CustomerId.Value);
+                        if (pref != null)
+                        {
+                            shouldNotify = pref.InquiryUpdates;
+                        }
+                    }
+                    else if (inquiry.UserId.HasValue)
+                    {
+                        var cust = await _context.Customers
+                            .FirstOrDefaultAsync(c => c.UserId == inquiry.UserId.Value);
+                        if (cust != null)
+                        {
+                            var pref = await _context.CustomerNotificationPreferences
+                                .FirstOrDefaultAsync(p => p.CustomerId == cust.CustomerId);
+                            if (pref != null)
+                            {
+                                shouldNotify = pref.InquiryUpdates;
+                            }
+                        }
+                    }
+
+                    if (shouldNotify && inquiry.UserId.HasValue)
+                    {
+                        var vendorName = inquiry.Vendor?.BusinessName ?? "Vendor";
+                        _context.Notifications.Add(new Notification
+                        {
+                            UserId = inquiry.UserId.Value,
+                            Title = "Inquiry Status Updated",
+                            Message = $"Your inquiry with {vendorName} has been marked as {matchedStatus}.",
+                            Type = Backend.Constants.NotificationTypes.InquiryStatusChanged,
+                            IsRead = false
+                        });
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error creating inquiry status change notification: {ex.Message}");
+                }
+            }
+
+            return Ok(new
+            {
+                success = true,
+                inquiryId = inquiry.InquiryId,
+                status = inquiry.Status,
+                message = "Inquiry status updated successfully."
+            });
+        }
+    }
+
+    public class UpdateInquiryStatusDto
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Status { get; set; } = string.Empty;
     }
 
     public class UpdateInquiryDto

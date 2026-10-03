@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Backend.DTOs
 {
@@ -171,6 +172,9 @@ namespace Backend.DTOs
         public List<VendorGalleryImageDto> GalleryImages { get; set; } = new();
         public List<VendorPerformanceResponseDto> Performances { get; set; } = new();
         public List<PublicVendorServiceItemDto> Services { get; set; } = new();
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? ContactHidden { get; set; }
     }
 
     public class PublicVendorServiceItemDto

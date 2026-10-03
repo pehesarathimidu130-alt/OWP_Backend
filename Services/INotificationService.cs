@@ -6,7 +6,8 @@ namespace Backend.Services
 {
     public interface INotificationService
     {
-        Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId);
+        Task<List<NotificationResponseDto>> GetNotificationsAsync(int userId, int? page = null, int? pageSize = null);
+        Task<int> GetUnreadCountAsync(int userId);
         Task<bool> MarkAsReadAsync(int userId, int notificationId);
         Task MarkAllAsReadAsync(int userId);
         Task<bool> DeleteNotificationAsync(int userId, int notificationId);
