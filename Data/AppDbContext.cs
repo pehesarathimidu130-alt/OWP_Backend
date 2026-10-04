@@ -24,6 +24,7 @@ namespace Backend.Data
         public DbSet<Vendor> Vendors { get; set; } = null!;
         public DbSet<FlaggedContent> FlaggedContents { get; set; } = null!;
         public DbSet<Customer> Customers { get; set; } = null!;
+        public DbSet<CustomerNotificationPreferences> CustomerNotificationPreferences { get; set; } = null!;
         public DbSet<VendorService> VendorServices { get; set; } = null!;
         public DbSet<VendorPerformance> VendorPerformances { get; set; } = null!;
         public DbSet<Notification> Notifications { get; set; } = null!;
@@ -89,6 +90,17 @@ namespace Backend.Data
             modelBuilder.Entity<CustomerFavorite>()
                 .HasIndex(cf => new { cf.UserId, cf.ServiceId })
                 .IsUnique();
+
+            // CustomerNotificationPreferences relationship and unique index on CustomerId
+            modelBuilder.Entity<CustomerNotificationPreferences>()
+                .HasIndex(p => p.CustomerId)
+                .IsUnique();
+
+            modelBuilder.Entity<CustomerNotificationPreferences>()
+                .HasOne(p => p.Customer)
+                .WithMany()
+                .HasForeignKey(p => p.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // ListingViews Indexes
             modelBuilder.Entity<ListingView>()

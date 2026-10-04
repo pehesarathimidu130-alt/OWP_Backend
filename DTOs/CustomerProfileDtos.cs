@@ -14,6 +14,7 @@ namespace Backend.DTOs
         public DateTime CreatedAt { get; set; }
         public int FavoritesCount { get; set; }
         public int InquiriesCount { get; set; }
+        public string? ProfilePhotoUrl { get; set; }
     }
 
     public class UpdateCustomerProfileRequestDto

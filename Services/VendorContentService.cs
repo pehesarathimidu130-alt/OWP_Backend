@@ -12,17 +12,17 @@ namespace Backend.Services
     public class VendorContentService : IVendorContentService
     {
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _environment;
+        private readonly IFileStorage _fileStorage;
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
             NumberHandling = JsonNumberHandling.AllowReadingFromString
         };
 
-        public VendorContentService(AppDbContext context, IWebHostEnvironment environment)
+        public VendorContentService(AppDbContext context, IFileStorage fileStorage)
         {
             _context = context;
-            _environment = environment;
+            _fileStorage = fileStorage;
         }
 
         public async Task<List<VendorServiceResponseDto>> GetServicesAsync(int userId)
@@ -67,6 +67,26 @@ namespace Backend.Services
             var vendorId = await GetVendorIdAsync(userId);
             var category = await ResolveCategoryAsync(request.CategoryId, request.Category);
 
+            double? lat = request.Latitude;
+            double? lng = request.Longitude;
+            string? addr = request.LocationAddress;
+            string? placeId = request.GooglePlaceId;
+            double? radius = request.ServiceRadiusKm;
+
+            if (!lat.HasValue && request.Details.HasValue && request.Details.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (request.Details.Value.TryGetProperty("latitude", out var latProp) && latProp.TryGetDouble(out var parsedLat))
+                    lat = parsedLat;
+                if (request.Details.Value.TryGetProperty("longitude", out var lngProp) && lngProp.TryGetDouble(out var parsedLng))
+                    lng = parsedLng;
+                if (request.Details.Value.TryGetProperty("locationAddress", out var addrProp) && addrProp.ValueKind == JsonValueKind.String)
+                    addr = addrProp.GetString();
+                if (request.Details.Value.TryGetProperty("googlePlaceId", out var placeProp) && placeProp.ValueKind == JsonValueKind.String)
+                    placeId = placeProp.GetString();
+                if (request.Details.Value.TryGetProperty("serviceRadiusKm", out var radiusProp) && radiusProp.TryGetDouble(out var parsedRadius))
+                    radius = parsedRadius;
+            }
+
             var service = new VendorService
             {
                 VendorId = vendorId,
@@ -78,6 +98,11 @@ namespace Backend.Services
                 IsPriceOnRequest = request.PriceOnRequest,
                 Status = string.IsNullOrWhiteSpace(request.Status) ? "Draft" : request.Status.Trim(),
                 CoverImageUrl = string.IsNullOrWhiteSpace(request.CoverImageUrl) ? null : request.CoverImageUrl.Trim(),
+                Latitude = lat,
+                Longitude = lng,
+                LocationAddress = string.IsNullOrWhiteSpace(addr) ? null : addr.Trim(),
+                GooglePlaceId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim(),
+                ServiceRadiusKm = radius,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -139,13 +164,47 @@ namespace Backend.Services
             var previousStatus = service.Status;
             var newStatus = string.IsNullOrWhiteSpace(request.Status) ? "Draft" : request.Status.Trim();
 
+            var oldPrice = service.Price;
+            var oldIsPriceOnRequest = service.IsPriceOnRequest;
+            var newPrice = request.PriceOnRequest ? null : request.Price;
+            var newIsPriceOnRequest = request.PriceOnRequest;
+
+            bool priceChanged = !oldIsPriceOnRequest && !newIsPriceOnRequest &&
+                                oldPrice.HasValue && newPrice.HasValue &&
+                                oldPrice.Value != newPrice.Value;
+
+            double? lat = request.Latitude;
+            double? lng = request.Longitude;
+            string? addr = request.LocationAddress;
+            string? placeId = request.GooglePlaceId;
+            double? radius = request.ServiceRadiusKm;
+
+            if (!lat.HasValue && request.Details.HasValue && request.Details.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (request.Details.Value.TryGetProperty("latitude", out var latProp) && latProp.TryGetDouble(out var parsedLat))
+                    lat = parsedLat;
+                if (request.Details.Value.TryGetProperty("longitude", out var lngProp) && lngProp.TryGetDouble(out var parsedLng))
+                    lng = parsedLng;
+                if (request.Details.Value.TryGetProperty("locationAddress", out var addrProp) && addrProp.ValueKind == JsonValueKind.String)
+                    addr = addrProp.GetString();
+                if (request.Details.Value.TryGetProperty("googlePlaceId", out var placeProp) && placeProp.ValueKind == JsonValueKind.String)
+                    placeId = placeProp.GetString();
+                if (request.Details.Value.TryGetProperty("serviceRadiusKm", out var radiusProp) && radiusProp.TryGetDouble(out var parsedRadius))
+                    radius = parsedRadius;
+            }
+
             service.ServiceName = request.Title.Trim();
             service.ShortDescription = request.Description?.Trim() ?? string.Empty;
             service.Description = request.FullDescription?.Trim();
-            service.Price = request.PriceOnRequest ? null : request.Price;
-            service.IsPriceOnRequest = request.PriceOnRequest;
+            service.Price = newPrice;
+            service.IsPriceOnRequest = newIsPriceOnRequest;
             service.Status = newStatus;
             service.CategoryId = category.CategoryId;
+            service.Latitude = lat;
+            service.Longitude = lng;
+            service.LocationAddress = string.IsNullOrWhiteSpace(addr) ? null : addr.Trim();
+            service.GooglePlaceId = string.IsNullOrWhiteSpace(placeId) ? null : placeId.Trim();
+            service.ServiceRadiusKm = radius;
             if (request.CoverImageUrl != null)
             {
                 service.CoverImageUrl = string.IsNullOrWhiteSpace(request.CoverImageUrl) ? null : request.CoverImageUrl.Trim();
@@ -185,6 +244,42 @@ namespace Backend.Services
 
             await _context.SaveChangesAsync();
 
+            if (priceChanged)
+            {
+                try
+                {
+                    var recipientUserIds = await (
+                        from f in _context.CustomerFavorites
+                        where f.ServiceId == serviceId
+                        join cust in _context.Customers on f.UserId equals cust.UserId into cGroup
+                        from c in cGroup.DefaultIfEmpty()
+                        join pref in _context.CustomerNotificationPreferences on c.CustomerId equals pref.CustomerId into pGroup
+                        from p in pGroup.DefaultIfEmpty()
+                        where p == null || p.PriceChanges
+                        select f.UserId
+                    ).Distinct().ToListAsync();
+
+                    if (recipientUserIds.Count > 0)
+                    {
+                        var priceNotifications = recipientUserIds.Select(uid => new Notification
+                        {
+                            UserId = uid,
+                            Title = "Price Updated",
+                            Message = $"The price for \"{service.ServiceName}\" was updated to LKR {newPrice!.Value:N2}.",
+                            Type = NotificationTypes.PriceUpdated,
+                            IsRead = false
+                        });
+                        _context.Notifications.AddRange(priceNotifications);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // A failure must never fail the vendor's update
+                    Console.WriteLine($"Error sending price change notifications for service {serviceId}: {ex.Message}");
+                }
+            }
+
             return await GetServiceByIdAsync(userId, service.ServiceId);
         }
 
@@ -198,7 +293,7 @@ namespace Backend.Services
 
             foreach (var img in service.Images)
             {
-                DeleteFile(img.ImageUrl);
+                await _fileStorage.DeleteAsync(img.ImageUrl);
             }
 
             _context.VendorServices.Remove(service);
@@ -600,6 +695,11 @@ namespace Backend.Services
                 PriceOnRequest = service.IsPriceOnRequest,
                 Status = service.Status,
                 CoverImageUrl = service.CoverImageUrl,
+                Latitude = service.Latitude,
+                Longitude = service.Longitude,
+                LocationAddress = service.LocationAddress,
+                GooglePlaceId = service.GooglePlaceId,
+                ServiceRadiusKm = service.ServiceRadiusKm,
                 Images = service.Images != null && service.Images.Count > 0
                     ? service.Images
                         .OrderBy(img => img.DisplayOrder)
@@ -622,7 +722,14 @@ namespace Backend.Services
             };
 
             // Unified details dictionary populated for frontend wizard consumption
-            var detailsDict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            var detailsDict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["latitude"] = service.Latitude,
+                ["longitude"] = service.Longitude,
+                ["locationAddress"] = service.LocationAddress,
+                ["googlePlaceId"] = service.GooglePlaceId,
+                ["serviceRadiusKm"] = service.ServiceRadiusKm,
+            };
 
             if (service.CategoryId == 1) // Hotel / Venue
             {
@@ -939,7 +1046,7 @@ namespace Backend.Services
             performance.UpdatedAt = DateTime.UtcNow;
             if (photo != null)
             {
-                DeletePhoto(performance.PhotoUrl);
+                await _fileStorage.DeleteAsync(performance.PhotoUrl);
                 performance.PhotoUrl = await SavePhotoAsync(photo);
             }
             await _context.SaveChangesAsync();
@@ -951,7 +1058,7 @@ namespace Backend.Services
             var vendorId = await GetVendorIdAsync(userId);
             var performance = await _context.VendorPerformances.FirstOrDefaultAsync(item => item.PerformanceId == performanceId && item.VendorId == vendorId)
                 ?? throw new KeyNotFoundException("Performance was not found.");
-            DeletePhoto(performance.PhotoUrl);
+            await _fileStorage.DeleteAsync(performance.PhotoUrl);
             _context.VendorPerformances.Remove(performance);
             await _context.SaveChangesAsync();
         }
@@ -981,12 +1088,8 @@ namespace Backend.Services
             {
                 throw new ArgumentException("Photos must be 5 MB or smaller.");
             }
-            var folder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "vendor-performance");
-            Directory.CreateDirectory(folder);
             var fileName = $"{Guid.NewGuid():N}{extension}";
-            await using var stream = File.Create(Path.Combine(folder, fileName));
-            await photo.CopyToAsync(stream);
-            return $"/uploads/vendor-performance/{fileName}";
+            return await _fileStorage.SaveAsync(photo, "vendor-performance", fileName, photo.ContentType);
         }
 
         public async Task<VendorServiceImageDto> UploadServiceImageAsync(int userId, int serviceId, IFormFile file, bool isCover = false)
@@ -1014,19 +1117,8 @@ namespace Backend.Services
                 throw new ArgumentException("Image size must be 10 MB or smaller.");
             }
 
-            var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var folder = Path.Combine(rootPath, "uploads", "vendor-services");
-            Directory.CreateDirectory(folder);
-
             var fileName = $"{Guid.NewGuid():N}{extension}";
-            var destinationPath = Path.Combine(folder, fileName);
-
-            await using (var stream = File.Create(destinationPath))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var relativeUrl = $"/uploads/vendor-services/{fileName}";
+            var relativeUrl = await _fileStorage.SaveAsync(file, "vendor-services", fileName, file.ContentType);
 
             var shouldBeCover = isCover || string.IsNullOrWhiteSpace(service.CoverImageUrl) || service.Images.Count == 0;
 
@@ -1075,7 +1167,7 @@ namespace Backend.Services
             var image = service.Images.FirstOrDefault(i => i.ImageId == imageId)
                 ?? throw new KeyNotFoundException($"Image with ID {imageId} was not found for this service.");
 
-            DeleteFile(image.ImageUrl);
+            await _fileStorage.DeleteAsync(image.ImageUrl);
             _context.VendorServiceImages.Remove(image);
 
             if (image.IsCover || service.CoverImageUrl == image.ImageUrl)
@@ -1096,25 +1188,5 @@ namespace Backend.Services
             await _context.SaveChangesAsync();
         }
 
-        private void DeleteFile(string? relativeUrl)
-        {
-            if (string.IsNullOrWhiteSpace(relativeUrl)) return;
-            try
-            {
-                var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var cleanPath = relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                var fullPath = Path.Combine(rootPath, cleanPath);
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                }
-            }
-            catch { }
-        }
-
-        private void DeletePhoto(string? photoUrl)
-        {
-            DeleteFile(photoUrl);
-        }
     }
 }

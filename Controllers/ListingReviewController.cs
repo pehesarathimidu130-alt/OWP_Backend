@@ -289,7 +289,7 @@ namespace Backend.Controllers
         private static ListingSummaryDto MapToSummary(VendorService vs)
         {
             var vendor   = vs.Vendor;
-            var location = vendor?.City ?? vendor?.Address ?? "";
+            var location = !string.IsNullOrWhiteSpace(vs.LocationAddress) ? vs.LocationAddress : (vendor?.City ?? vendor?.Address ?? "");
             var name     = vendor?.BusinessName ?? "Unknown";
             var initials = name.Length >= 2
                 ? (name.Split(' ') is { Length: > 1 } parts
@@ -349,6 +349,11 @@ namespace Backend.Controllers
                 ServiceName      = vs.ServiceName,
                 ServiceDescription = vs.Description,
                 IsVendorApproved = vendor?.IsApproved ?? false,
+                Latitude         = vs.Latitude,
+                Longitude        = vs.Longitude,
+                LocationAddress  = vs.LocationAddress,
+                GooglePlaceId    = vs.GooglePlaceId,
+                ServiceRadiusKm  = vs.ServiceRadiusKm,
 
                 // Gallery images from VendorServiceImages
                 GalleryImages = vs.Images

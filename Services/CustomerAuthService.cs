@@ -15,15 +15,17 @@ namespace Backend.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<CustomerAuthService> _logger;
         private readonly IEmailService _emailService;
+        private readonly IGoogleTokenVerifier _googleTokenVerifier;
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Code, DateTime ExpiresAt)> _resetTokens = new();
 
-        public CustomerAuthService(AppDbContext context, IConfiguration configuration, ILogger<CustomerAuthService> logger, IEmailService emailService)
+        public CustomerAuthService(AppDbContext context, IConfiguration configuration, ILogger<CustomerAuthService> logger, IEmailService emailService, IGoogleTokenVerifier googleTokenVerifier)
         {
             _context = context;
             _configuration = configuration;
             _logger = logger;
             _emailService = emailService;
+            _googleTokenVerifier = googleTokenVerifier;
         }
 
         public async Task<CustomerAuthResponseDto> RegisterAsync(CustomerRegisterRequestDto request)
@@ -159,6 +161,128 @@ namespace Backend.Services
                 CustomerId = customer.CustomerId,
                 Role = "Customer",
                 FullName = user.FullName,
+                Email = user.Email
+            };
+        }
+
+        public async Task<CustomerAuthResponseDto> GoogleLoginAsync(GoogleSignInRequest request)
+        {
+            // 1. Verify token
+            var googleResult = await _googleTokenVerifier.VerifyAsync(request.IdToken);
+
+            // 2. Look up by external login (Provider=Google, ProviderSubject=sub)
+            var externalLogin = await _context.UserExternalLogins
+                .Include(uel => uel.User)
+                    .ThenInclude(u => u!.Role)
+                .FirstOrDefaultAsync(uel => uel.Provider == "Google" && uel.ProviderSubject == googleResult.Sub);
+
+            User? user;
+
+            if (externalLogin != null)
+            {
+                user = externalLogin.User!;
+                if (!user.IsActive)
+                {
+                    _logger.LogWarning("Google login failed: account deactivated for UserId {UserId}", user.UserId);
+                    throw new UnauthorizedAccessException("Your account has been deactivated.");
+                }
+            }
+            else
+            {
+                // 3. Fall back to email lookup
+                var emailLower = googleResult.Email.ToLower();
+                user = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == emailLower);
+
+                if (user != null)
+                {
+                    // Check if role is Customer
+                    if (!user.Role?.RoleName.Equals("Customer", StringComparison.OrdinalIgnoreCase) ?? true)
+                    {
+                        _logger.LogWarning("Google login denied for UserId {UserId}: role is {Role}, not Customer", user.UserId, user.Role?.RoleName);
+                        throw new UnauthorizedAccessException("This email is registered under a different account type.");
+                    }
+
+                    if (!user.IsActive)
+                    {
+                        _logger.LogWarning("Google login failed: account deactivated for UserId {UserId}", user.UserId);
+                        throw new UnauthorizedAccessException("Your account has been deactivated.");
+                    }
+
+                    // Link the Google sub to this existing Customer user
+                    _context.UserExternalLogins.Add(new UserExternalLogin
+                    {
+                        UserId = user.UserId,
+                        Provider = "Google",
+                        ProviderSubject = googleResult.Sub
+                    });
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Linked Google sub to existing Customer UserId={UserId}", user.UserId);
+                }
+                else
+                {
+                    // 4. Create new customer user
+                    var customerRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Customer");
+                    if (customerRole == null)
+                    {
+                        customerRole = new Role { RoleName = "Customer" };
+                        _context.Roles.Add(customerRole);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    user = new User
+                    {
+                        FullName = googleResult.FullName,
+                        Email = googleResult.Email,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                        PhoneNumber = null,
+                        RoleId = customerRole.RoleId,
+                        IsActive = true
+                    };
+
+                    _context.Users.Add(user);
+                    await _context.SaveChangesAsync();
+
+                    var nameParts = user.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var firstName = nameParts.Length > 0 ? nameParts[0] : "Unknown";
+                    var lastName = nameParts.Length > 1 ? string.Join(" ", nameParts.Skip(1)) : "Unknown";
+
+                    var customer = new Customer
+                    {
+                        UserId = user.UserId,
+                        FirstName = firstName,
+                        LastName = lastName
+                    };
+
+                    _context.Customers.Add(customer);
+
+                    _context.UserExternalLogins.Add(new UserExternalLogin
+                    {
+                        UserId = user.UserId,
+                        Provider = "Google",
+                        ProviderSubject = googleResult.Sub
+                    });
+
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Created new Customer via Google sign-in UserId={UserId}", user.UserId);
+                }
+            }
+
+            var customerRecord = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == user!.UserId);
+            if (customerRecord == null)
+            {
+                throw new UnauthorizedAccessException("Customer profile not found.");
+            }
+
+            var token = GenerateJwtToken(user!, "Customer");
+
+            return new CustomerAuthResponseDto
+            {
+                Token = token,
+                CustomerId = customerRecord.CustomerId,
+                Role = "Customer",
+                FullName = user!.FullName,
                 Email = user.Email
             };
         }

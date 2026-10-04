@@ -23,6 +23,9 @@ namespace Backend.Entities
         [MaxLength(50)]
         public string LastName { get; set; } = string.Empty;
 
+        [MaxLength(500)]
+        public string? ProfilePhotoUrl { get; set; }
+
         [NotMapped]
         public bool IsActive
         {

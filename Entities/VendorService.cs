@@ -42,6 +42,21 @@ namespace Backend.Entities
         [MaxLength(500)]
         public string? CoverImageUrl { get; set; }
 
+        [Column(TypeName = "double precision")]
+        public double? Latitude { get; set; }
+
+        [Column(TypeName = "double precision")]
+        public double? Longitude { get; set; }
+
+        [MaxLength(300)]
+        public string? LocationAddress { get; set; }
+
+        [MaxLength(100)]
+        public string? GooglePlaceId { get; set; }
+
+        [Column(TypeName = "double precision")]
+        public double? ServiceRadiusKm { get; set; }
+
         public ICollection<VendorServiceImage> Images { get; set; } = new List<VendorServiceImage>();
         public ICollection<VenueSpace> VenueSpaces { get; set; } = new List<VenueSpace>();
         

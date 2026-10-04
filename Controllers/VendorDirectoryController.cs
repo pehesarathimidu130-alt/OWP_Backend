@@ -23,17 +23,20 @@ namespace Backend.Controllers
         private readonly IActivityLogService _activityLogService;
         private readonly ILogger<VendorDirectoryController> _logger;
         private readonly IWebHostEnvironment _environment;
+        private readonly IFileStorage _fileStorage;
 
         public VendorDirectoryController(
             AppDbContext context,
             IActivityLogService activityLogService,
             ILogger<VendorDirectoryController> logger,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IFileStorage fileStorage)
         {
             _context = context;
             _activityLogService = activityLogService;
             _logger = logger;
             _environment = environment;
+            _fileStorage = fileStorage;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -452,8 +455,8 @@ namespace Backend.Controllers
                 return NotFound(new ProblemDetails { Title = "Not Found", Detail = $"Vendor #{id} not found." });
             }
 
-            DeletePhysicalFile(vendor.LogoUrl);
-            DeletePhysicalFile(vendor.CoverImageUrl);
+            if (!string.IsNullOrEmpty(vendor.LogoUrl)) await _fileStorage.DeleteAsync(vendor.LogoUrl);
+            if (!string.IsNullOrEmpty(vendor.CoverImageUrl)) await _fileStorage.DeleteAsync(vendor.CoverImageUrl);
 
             vendor.LogoUrl = null;
             vendor.CoverImageUrl = null;
@@ -517,6 +520,11 @@ namespace Backend.Controllers
                 return NotFound(new ProblemDetails { Title = "Not Found", Detail = "Document not found." });
             }
 
+            if (doc.FileUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return Redirect(doc.FileUrl);
+            }
+
             var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
             var cleanPath = doc.FileUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
             var fullPath = Path.Combine(rootPath, cleanPath);
@@ -540,23 +548,5 @@ namespace Backend.Controllers
             return File(stream, contentType, enableRangeProcessing: true);
         }
 
-        private void DeletePhysicalFile(string? relativeUrl)
-        {
-            if (string.IsNullOrWhiteSpace(relativeUrl)) return;
-            try
-            {
-                var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var cleanPath = relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                var fullPath = Path.Combine(rootPath, cleanPath);
-                if (System.IO.File.Exists(fullPath))
-                {
-                    System.IO.File.Delete(fullPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete physical file {Path}", relativeUrl);
-            }
-        }
     }
 }

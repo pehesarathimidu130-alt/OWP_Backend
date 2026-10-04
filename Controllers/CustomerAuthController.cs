@@ -102,6 +102,65 @@ namespace Backend.Controllers
         }
 
         /// <summary>
+        /// POST /api/auth/customer/google-login
+        /// Authenticates a Customer using a Google ID token.
+        /// </summary>
+        [HttpPost("google-login")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(CustomerAuthResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleSignInRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            try
+            {
+                var response = await _customerAuthService.GoogleLoginAsync(request);
+                return Ok(response);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning("Google login denied: {Message}", ex.Message);
+                return Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Authentication Failed"
+                );
+            }
+            catch (HttpRequestException)
+            {
+                return Problem(
+                    detail: "Unable to verify your Google account at this time. Please try again later.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Service Unavailable"
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError("Google sign-in failed: {Message}", ex.Message);
+                return Problem(
+                    detail: "Google sign-in is temporarily unavailable.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Service Unavailable"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error during customer google login");
+                return Problem(
+                    detail: "An unexpected error occurred during login.",
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "Internal Server Error"
+                );
+            }
+        }
+
+        /// <summary>
         /// POST /api/auth/customer/forgot-password OR /api/auth/forgot-password
         /// Generates a verification code and sends it via email.
         /// </summary>

@@ -22,20 +22,20 @@ namespace Backend.Controllers
         private readonly IAdminManagementService _adminService;
         private readonly INotificationService _notificationService;
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _environment;
+        private readonly Backend.Services.IFileStorage _fileStorage;
         private readonly ILogger<AdminSettingsController> _logger;
 
         public AdminSettingsController(
             IAdminManagementService adminService,
             INotificationService notificationService,
             AppDbContext context,
-            IWebHostEnvironment environment,
+            Backend.Services.IFileStorage fileStorage,
             ILogger<AdminSettingsController> logger)
         {
             _adminService = adminService;
             _notificationService = notificationService;
             _context = context;
-            _environment = environment;
+            _fileStorage = fileStorage;
             _logger = logger;
         }
 
@@ -337,37 +337,14 @@ namespace Backend.Controllers
                 return BadRequest(new { detail = "Image size exceeds the 5 MB limit." });
             }
 
-            var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var folder = Path.Combine(rootPath, "uploads", "admin-profile");
-            Directory.CreateDirectory(folder);
-
             // Delete existing profile photo if exists
             if (!string.IsNullOrWhiteSpace(admin.ProfilePictureUrl))
             {
-                try
-                {
-                    var oldCleanPath = admin.ProfilePictureUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                    var oldFullPath = Path.Combine(rootPath, oldCleanPath);
-                    if (System.IO.File.Exists(oldFullPath))
-                    {
-                        System.IO.File.Delete(oldFullPath);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to delete old profile photo: {Url}", admin.ProfilePictureUrl);
-                }
+                await _fileStorage.DeleteAsync(admin.ProfilePictureUrl);
             }
 
             var fileName = $"{Guid.NewGuid():N}{extension}";
-            var destinationPath = Path.Combine(folder, fileName);
-
-            await using (var stream = System.IO.File.Create(destinationPath))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var relativeUrl = $"/uploads/admin-profile/{fileName}";
+            var relativeUrl = await _fileStorage.SaveAsync(file, "admin-profile", fileName, file.ContentType);
             admin.ProfilePictureUrl = relativeUrl;
             admin.UpdatedAt = DateTime.UtcNow;
 
@@ -407,20 +384,7 @@ namespace Backend.Controllers
 
             if (!string.IsNullOrWhiteSpace(admin.ProfilePictureUrl))
             {
-                try
-                {
-                    var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                    var cleanPath = admin.ProfilePictureUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                    var fullPath = Path.Combine(rootPath, cleanPath);
-                    if (System.IO.File.Exists(fullPath))
-                    {
-                        System.IO.File.Delete(fullPath);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to delete profile photo file: {Url}", admin.ProfilePictureUrl);
-                }
+                await _fileStorage.DeleteAsync(admin.ProfilePictureUrl);
 
                 admin.ProfilePictureUrl = null;
                 admin.UpdatedAt = DateTime.UtcNow;

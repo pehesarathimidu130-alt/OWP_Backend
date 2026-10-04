@@ -27,6 +27,17 @@ namespace Backend.DTOs
         [MaxLength(500)]
         public string? CoverImageUrl { get; set; }
 
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+
+        [MaxLength(300)]
+        public string? LocationAddress { get; set; }
+
+        [MaxLength(100)]
+        public string? GooglePlaceId { get; set; }
+
+        public double? ServiceRadiusKm { get; set; }
+
         public JsonElement? Details { get; set; }
 
         public List<VenueSpaceDto>? Spaces { get; set; }
@@ -51,6 +62,11 @@ namespace Backend.DTOs
         public bool PriceOnRequest { get; set; }
         public string Status { get; set; } = "Draft";
         public string? CoverImageUrl { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? LocationAddress { get; set; }
+        public string? GooglePlaceId { get; set; }
+        public double? ServiceRadiusKm { get; set; }
         public List<VendorServiceImageDto> Images { get; set; } = new();
         public int Views { get; set; }
         public int Inquiries { get; set; }

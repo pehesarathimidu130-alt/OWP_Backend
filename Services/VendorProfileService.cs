@@ -11,17 +11,17 @@ namespace Backend.Services
     public class VendorProfileService : IVendorProfileService
     {
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _environment;
+        private readonly IFileStorage _fileStorage;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
         };
 
-        public VendorProfileService(AppDbContext context, IWebHostEnvironment environment)
+        public VendorProfileService(AppDbContext context, IFileStorage fileStorage)
         {
             _context = context;
-            _environment = environment;
+            _fileStorage = fileStorage;
         }
 
         public async Task<VendorProfileResponseDto> GetProfileAsync(int userId)
@@ -82,7 +82,7 @@ namespace Backend.Services
 
             if (!string.IsNullOrEmpty(vendor.LogoUrl))
             {
-                DeleteFile(vendor.LogoUrl);
+                await _fileStorage.DeleteAsync(vendor.LogoUrl);
             }
 
             vendor.LogoUrl = logoUrl;
@@ -95,7 +95,7 @@ namespace Backend.Services
             var vendor = await GetOrCreateVendorAsync(userId);
             if (!string.IsNullOrEmpty(vendor.LogoUrl))
             {
-                DeleteFile(vendor.LogoUrl);
+                await _fileStorage.DeleteAsync(vendor.LogoUrl);
                 vendor.LogoUrl = null;
                 await _context.SaveChangesAsync();
             }
@@ -108,7 +108,7 @@ namespace Backend.Services
 
             if (!string.IsNullOrEmpty(vendor.CoverImageUrl))
             {
-                DeleteFile(vendor.CoverImageUrl);
+                await _fileStorage.DeleteAsync(vendor.CoverImageUrl);
             }
 
             vendor.CoverImageUrl = coverUrl;
@@ -121,7 +121,7 @@ namespace Backend.Services
             var vendor = await GetOrCreateVendorAsync(userId);
             if (!string.IsNullOrEmpty(vendor.CoverImageUrl))
             {
-                DeleteFile(vendor.CoverImageUrl);
+                await _fileStorage.DeleteAsync(vendor.CoverImageUrl);
                 vendor.CoverImageUrl = null;
                 await _context.SaveChangesAsync();
             }
@@ -193,7 +193,7 @@ namespace Backend.Services
                 .FirstOrDefaultAsync(g => g.ImageId == imageId && g.VendorId == vendor.VendorId)
                 ?? throw new KeyNotFoundException("Gallery image not found.");
 
-            DeleteFile(image.ImageUrl);
+            await _fileStorage.DeleteAsync(image.ImageUrl);
             _context.VendorGalleryImages.Remove(image);
             await _context.SaveChangesAsync();
         }
@@ -234,7 +234,7 @@ namespace Backend.Services
                 .FirstOrDefaultAsync(d => d.DocumentId == documentId && d.VendorId == vendor.VendorId)
                 ?? throw new KeyNotFoundException("Document not found.");
 
-            DeleteFile(doc.FileUrl);
+            await _fileStorage.DeleteAsync(doc.FileUrl);
             _context.VendorDocuments.Remove(doc);
             await _context.SaveChangesAsync();
         }
@@ -360,33 +360,8 @@ namespace Backend.Services
                 throw new ArgumentException($"File size exceeds limit of {maxSizeBytes / (1024 * 1024)} MB.");
             }
 
-            var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var folder = Path.Combine(rootPath, "uploads", "vendor-profile", subfolder);
-            Directory.CreateDirectory(folder);
-
             var fileName = $"{Guid.NewGuid():N}{extension}";
-            var destinationPath = Path.Combine(folder, fileName);
-
-            await using var stream = File.Create(destinationPath);
-            await file.CopyToAsync(stream);
-
-            return $"/uploads/vendor-profile/{subfolder}/{fileName}";
-        }
-
-        private void DeleteFile(string? relativeUrl)
-        {
-            if (string.IsNullOrWhiteSpace(relativeUrl)) return;
-            try
-            {
-                var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var cleanPath = relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                var fullPath = Path.Combine(rootPath, cleanPath);
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                }
-            }
-            catch { }
+            return await _fileStorage.SaveAsync(file, $"vendor-profile/{subfolder}", fileName, file.ContentType);
         }
     }
 }

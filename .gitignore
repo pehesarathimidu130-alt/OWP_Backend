@@ -44,5 +44,6 @@ npm-debug.log
 *.tmp
 
 # Uploaded files
-wwwroot/uploads/
+wwwroot/uploads/*
+!wwwroot/uploads/.gitkeep
 

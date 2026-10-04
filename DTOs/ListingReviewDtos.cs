@@ -42,6 +42,12 @@ namespace Backend.DTOs
         public string? ServiceDescription { get; set; }
         public bool IsVendorApproved { get; set; }
 
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? LocationAddress { get; set; }
+        public string? GooglePlaceId { get; set; }
+        public double? ServiceRadiusKm { get; set; }
+
         // Gallery images from VendorServiceImages
         public List<string> GalleryImages { get; set; } = new();
 

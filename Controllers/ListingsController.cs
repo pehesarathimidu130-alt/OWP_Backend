@@ -66,7 +66,10 @@ namespace Backend.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetListings(
             [FromQuery] string? category,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] double? lat = null,
+            [FromQuery] double? lng = null,
+            [FromQuery] double? radiusKm = null)
         {
             try
             {
@@ -115,52 +118,131 @@ namespace Backend.Controllers
                     ).ToList();
                 }
 
+                // Distance / Location radius filtering when coordinates are supplied
+                if (lat.HasValue && lng.HasValue)
+                {
+                    double userLat = lat.Value;
+                    double userLng = lng.Value;
+                    double maxRadius = radiusKm ?? 50; // default 50 km
+
+                    services = services.Where(vs =>
+                    {
+                        if (!vs.Latitude.HasValue || !vs.Longitude.HasValue) return false;
+                        var dist = CalculateHaversineDistanceKm(userLat, userLng, vs.Latitude.Value, vs.Longitude.Value);
+                        var coverageLimit = vs.ServiceRadiusKm ?? maxRadius;
+                        return dist <= coverageLimit;
+                    })
+                    .OrderBy(vs => CalculateHaversineDistanceKm(userLat, userLng, vs.Latitude!.Value, vs.Longitude!.Value))
+                    .ToList();
+                }
+
+                var isAuthenticated = User.Identity?.IsAuthenticated == true;
+
                 var result = services.Select(vs =>
                 {
                     var categoryName = vs.Category?.CategoryName ?? "General";
                     var fallbackImage = "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80";
 
-                    return new
+                    if (isAuthenticated)
                     {
-                        id = vs.ServiceId.ToString(),
-                        serviceId = vs.ServiceId,
-                        title = vs.ServiceName,
-                        serviceName = vs.ServiceName,
-                        category = categoryName,
-                        categoryId = vs.CategoryId,
-                        categoryIcon = GetCategoryIcon(categoryName),
-                        shortDescription = vs.ShortDescription,
-                        description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
-                        price = vs.Price,
-                        priceFrom = (double)(vs.Price ?? 0),
-                        isPriceOnRequest = vs.IsPriceOnRequest,
-                        status = vs.Status,
-                        coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
-                        imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
-                        images = vs.Images.Select(img => img.ImageUrl).ToList(),
-
-                        // Parent Vendor info
-                        vendorId = vs.VendorId,
-                        vendor = new
+                        return (object)new
                         {
-                            id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                            id = vs.ServiceId.ToString(),
+                            serviceId = vs.ServiceId,
+                            title = vs.ServiceName,
+                            serviceName = vs.ServiceName,
+                            category = categoryName,
+                            categoryId = vs.CategoryId,
+                            categoryIcon = GetCategoryIcon(categoryName),
+                            shortDescription = vs.ShortDescription,
+                            description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
+                            price = vs.Price,
+                            priceFrom = (double)(vs.Price ?? 0),
+                            isPriceOnRequest = vs.IsPriceOnRequest,
+                            status = vs.Status,
+                            coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                            imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                            images = vs.Images.Select(img => img.ImageUrl).ToList(),
+                            latitude = vs.Latitude,
+                            longitude = vs.Longitude,
+                            locationAddress = vs.LocationAddress,
+                            googlePlaceId = vs.GooglePlaceId,
+                            serviceRadiusKm = vs.ServiceRadiusKm,
+
+                            // Parent Vendor info
                             vendorId = vs.VendorId,
-                            name = vs.Vendor?.BusinessName ?? "Verified Vendor",
-                            businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
-                            ownerName = vs.Vendor?.OwnerName,
-                            location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
-                            city = vs.Vendor?.City ?? "Sri Lanka",
-                            address = vs.Vendor?.Address,
-                            contactNumber = vs.Vendor?.ContactNumber,
-                            email = vs.Vendor?.Email,
-                            logoUrl = vs.Vendor?.LogoUrl,
-                            coverImageUrl = vs.Vendor?.CoverImageUrl,
-                            rating = 4.9,
-                            reviewCount = 18,
-                            yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
-                            isApproved = vs.Vendor?.IsApproved ?? true
-                        }
-                    };
+                            vendor = new
+                            {
+                                id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                                vendorId = vs.VendorId,
+                                name = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                                businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                                ownerName = vs.Vendor?.OwnerName,
+                                location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
+                                city = vs.Vendor?.City ?? "Sri Lanka",
+                                address = vs.Vendor?.Address,
+                                contactNumber = vs.Vendor?.ContactNumber,
+                                email = vs.Vendor?.Email,
+                                logoUrl = vs.Vendor?.LogoUrl,
+                                coverImageUrl = vs.Vendor?.CoverImageUrl,
+                                rating = 4.9,
+                                reviewCount = 18,
+                                yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
+                                isApproved = vs.Vendor?.IsApproved ?? true
+                            }
+                        };
+                    }
+                    else
+                    {
+                        return (object)new
+                        {
+                            id = vs.ServiceId.ToString(),
+                            serviceId = vs.ServiceId,
+                            title = vs.ServiceName,
+                            serviceName = vs.ServiceName,
+                            category = categoryName,
+                            categoryId = vs.CategoryId,
+                            categoryIcon = GetCategoryIcon(categoryName),
+                            shortDescription = vs.ShortDescription,
+                            description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
+                            price = vs.Price,
+                            priceFrom = (double)(vs.Price ?? 0),
+                            isPriceOnRequest = vs.IsPriceOnRequest,
+                            status = vs.Status,
+                            coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                            imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                            images = vs.Images.Select(img => img.ImageUrl).ToList(),
+                            latitude = vs.Latitude,
+                            longitude = vs.Longitude,
+                            locationAddress = vs.LocationAddress,
+                            googlePlaceId = vs.GooglePlaceId,
+                            serviceRadiusKm = vs.ServiceRadiusKm,
+
+                            // Parent Vendor info
+                            vendorId = vs.VendorId,
+                            vendor = new
+                            {
+                                id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                                vendorId = vs.VendorId,
+                                name = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                                businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                                ownerName = vs.Vendor?.OwnerName,
+                                location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
+                                city = vs.Vendor?.City ?? "Sri Lanka",
+                                address = vs.Vendor?.Address,
+                                contactNumber = (string?)null,
+                                email = (string?)null,
+                                logoUrl = vs.Vendor?.LogoUrl,
+                                coverImageUrl = vs.Vendor?.CoverImageUrl,
+                                rating = 4.9,
+                                reviewCount = 18,
+                                yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
+                                isApproved = vs.Vendor?.IsApproved ?? true,
+                                contactHidden = true
+                            },
+                            contactHidden = true
+                        };
+                    }
                 }).ToList();
 
                 return Ok(result);
@@ -203,55 +285,129 @@ namespace Backend.Controllers
                     return NotFound(new { message = $"Service with ID {id} not found." });
                 }
 
+                var isAuthenticated = User.Identity?.IsAuthenticated == true;
+                var isAdmin = isAuthenticated && User.IsInRole("Admin");
+                var currentUserId = GetCurrentUserId();
+                var isOwner = isAuthenticated && currentUserId.HasValue && vs.Vendor != null && vs.Vendor.UserId == currentUserId.Value;
+
+                if (!isAdmin && !isOwner)
+                {
+                    var isListingActive = vs.Status == "Active" || vs.Status == "Approved";
+                    var isVendorApproved = vs.Vendor != null && (vs.Vendor.Status == "Approved" || vs.Vendor.IsApproved);
+                    if (!isListingActive || !isVendorApproved)
+                    {
+                        return NotFound(new { message = $"Service with ID {id} not found." });
+                    }
+                }
+
                 var categoryName = vs.Category?.CategoryName ?? "General";
                 var fallbackImage = "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80";
 
-                var result = new
-                {
-                    id = vs.ServiceId.ToString(),
-                    serviceId = vs.ServiceId,
-                    title = vs.ServiceName,
-                    serviceName = vs.ServiceName,
-                    category = categoryName,
-                    categoryId = vs.CategoryId,
-                    categoryIcon = GetCategoryIcon(categoryName),
-                    shortDescription = vs.ShortDescription,
-                    description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
-                    price = vs.Price,
-                    priceFrom = (double)(vs.Price ?? 0),
-                    isPriceOnRequest = vs.IsPriceOnRequest,
-                    status = vs.Status,
-                    coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
-                    imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
-                    images = vs.Images.Select(img => img.ImageUrl).ToList(),
-
-                    vendorId = vs.VendorId,
-                    vendor = new
+                object result = isAuthenticated
+                    ? new
                     {
-                        id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                        id = vs.ServiceId.ToString(),
+                        serviceId = vs.ServiceId,
+                        title = vs.ServiceName,
+                        serviceName = vs.ServiceName,
+                        category = categoryName,
+                        categoryId = vs.CategoryId,
+                        categoryIcon = GetCategoryIcon(categoryName),
+                        shortDescription = vs.ShortDescription,
+                        description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
+                        price = vs.Price,
+                        priceFrom = (double)(vs.Price ?? 0),
+                        isPriceOnRequest = vs.IsPriceOnRequest,
+                        status = vs.Status,
+                        coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                        imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                        images = vs.Images.Select(img => img.ImageUrl).ToList(),
+                        latitude = vs.Latitude,
+                        longitude = vs.Longitude,
+                        locationAddress = vs.LocationAddress,
+                        googlePlaceId = vs.GooglePlaceId,
+                        serviceRadiusKm = vs.ServiceRadiusKm,
+
                         vendorId = vs.VendorId,
-                        name = vs.Vendor?.BusinessName ?? "Verified Vendor",
-                        businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
-                        ownerName = vs.Vendor?.OwnerName,
-                        location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
-                        city = vs.Vendor?.City ?? "Sri Lanka",
-                        address = vs.Vendor?.Address,
-                        contactNumber = vs.Vendor?.ContactNumber,
-                        email = vs.Vendor?.Email,
-                        logoUrl = vs.Vendor?.LogoUrl,
-                        coverImageUrl = vs.Vendor?.CoverImageUrl,
-                        rating = 4.9,
-                        reviewCount = 18,
-                        yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
-                        isApproved = vs.Vendor?.IsApproved ?? true
-                    },
-                    hotelVenueDetails = vs.HotelVenueDetails != null ? MapHotelVenue(vs.HotelVenueDetails) : null,
-                    photographyDetails = vs.PhotographyDetails != null ? MapPhotography(vs.PhotographyDetails) : null,
-                    decorationsDetails = vs.DecorationsDetails != null ? MapDecorations(vs.DecorationsDetails) : null,
-                    cateringDetails = vs.CateringDetails != null ? MapCatering(vs.CateringDetails) : null,
-                    musicDetails = vs.MusicDetails != null ? MapMusic(vs.MusicDetails) : null,
-                    venueSpaces = vs.VenueSpaces?.Select(MapVenueSpace).ToList()
-                };
+                        vendor = new
+                        {
+                            id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                            vendorId = vs.VendorId,
+                            name = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                            businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                            ownerName = vs.Vendor?.OwnerName,
+                            location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
+                            city = vs.Vendor?.City ?? "Sri Lanka",
+                            address = vs.Vendor?.Address,
+                            contactNumber = vs.Vendor?.ContactNumber,
+                            email = vs.Vendor?.Email,
+                            logoUrl = vs.Vendor?.LogoUrl,
+                            coverImageUrl = vs.Vendor?.CoverImageUrl,
+                            rating = 4.9,
+                            reviewCount = 18,
+                            yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
+                            isApproved = vs.Vendor?.IsApproved ?? true
+                        },
+                        hotelVenueDetails = vs.HotelVenueDetails != null ? MapHotelVenue(vs.HotelVenueDetails) : null,
+                        photographyDetails = vs.PhotographyDetails != null ? MapPhotography(vs.PhotographyDetails) : null,
+                        decorationsDetails = vs.DecorationsDetails != null ? MapDecorations(vs.DecorationsDetails) : null,
+                        cateringDetails = vs.CateringDetails != null ? MapCatering(vs.CateringDetails) : null,
+                        musicDetails = vs.MusicDetails != null ? MapMusic(vs.MusicDetails) : null,
+                        venueSpaces = vs.VenueSpaces?.Select(MapVenueSpace).ToList()
+                    }
+                    : new
+                    {
+                        id = vs.ServiceId.ToString(),
+                        serviceId = vs.ServiceId,
+                        title = vs.ServiceName,
+                        serviceName = vs.ServiceName,
+                        category = categoryName,
+                        categoryId = vs.CategoryId,
+                        categoryIcon = GetCategoryIcon(categoryName),
+                        shortDescription = vs.ShortDescription,
+                        description = !string.IsNullOrWhiteSpace(vs.Description) ? vs.Description : vs.ShortDescription,
+                        price = vs.Price,
+                        priceFrom = (double)(vs.Price ?? 0),
+                        isPriceOnRequest = vs.IsPriceOnRequest,
+                        status = vs.Status,
+                        coverImageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                        imageUrl = vs.CoverImageUrl ?? vs.Vendor?.CoverImageUrl ?? fallbackImage,
+                        images = vs.Images.Select(img => img.ImageUrl).ToList(),
+                        latitude = vs.Latitude,
+                        longitude = vs.Longitude,
+                        locationAddress = vs.LocationAddress,
+                        googlePlaceId = vs.GooglePlaceId,
+                        serviceRadiusKm = vs.ServiceRadiusKm,
+
+                        vendorId = vs.VendorId,
+                        vendor = new
+                        {
+                            id = vs.Vendor?.VendorId.ToString() ?? vs.VendorId.ToString(),
+                            vendorId = vs.VendorId,
+                            name = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                            businessName = vs.Vendor?.BusinessName ?? "Verified Vendor",
+                            ownerName = vs.Vendor?.OwnerName,
+                            location = vs.Vendor?.City ?? vs.Vendor?.Address ?? "Sri Lanka",
+                            city = vs.Vendor?.City ?? "Sri Lanka",
+                            address = vs.Vendor?.Address,
+                            contactNumber = (string?)null,
+                            email = (string?)null,
+                            logoUrl = vs.Vendor?.LogoUrl,
+                            coverImageUrl = vs.Vendor?.CoverImageUrl,
+                            rating = 4.9,
+                            reviewCount = 18,
+                            yearsInBusiness = vs.Vendor?.YearsInBusiness ?? 3,
+                            isApproved = vs.Vendor?.IsApproved ?? true,
+                            contactHidden = true
+                        },
+                        hotelVenueDetails = vs.HotelVenueDetails != null ? MapHotelVenue(vs.HotelVenueDetails) : null,
+                        photographyDetails = vs.PhotographyDetails != null ? MapPhotography(vs.PhotographyDetails) : null,
+                        decorationsDetails = vs.DecorationsDetails != null ? MapDecorations(vs.DecorationsDetails) : null,
+                        cateringDetails = vs.CateringDetails != null ? MapCatering(vs.CateringDetails) : null,
+                        musicDetails = vs.MusicDetails != null ? MapMusic(vs.MusicDetails) : null,
+                        venueSpaces = vs.VenueSpaces?.Select(MapVenueSpace).ToList(),
+                        contactHidden = true
+                    };
 
                 return Ok(result);
             }
@@ -278,6 +434,18 @@ namespace Backend.Controllers
             if (cat.Contains("decor") || cat.Contains("flower") || cat.Contains("flora")) return "local_florist";
             if (cat.Contains("attire") || cat.Contains("dress")) return "checkroom";
             return "stars";
+        }
+
+        private static double CalculateHaversineDistanceKm(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371.0; // Earth radius in km
+            var dLat = (lat2 - lat1) * Math.PI / 180.0;
+            var dLon = (lon2 - lon1) * Math.PI / 180.0;
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
         }
 
         /// <summary>
