@@ -69,6 +69,7 @@ namespace Backend.DTOs
         public string Role { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        public string? ProfilePhotoUrl { get; set; }
     }
 
     public class CustomerForgotPasswordRequestDto

@@ -92,7 +92,8 @@ namespace Backend.Services
                 CustomerId = customer.CustomerId,
                 Role = "Customer",
                 FullName = user.FullName,
-                Email = user.Email
+                Email = user.Email,
+                ProfilePhotoUrl = customer.ProfilePhotoUrl
             };
         }
 
@@ -161,7 +162,8 @@ namespace Backend.Services
                 CustomerId = customer.CustomerId,
                 Role = "Customer",
                 FullName = user.FullName,
-                Email = user.Email
+                Email = user.Email,
+                ProfilePhotoUrl = customer.ProfilePhotoUrl
             };
         }
 
@@ -252,7 +254,8 @@ namespace Backend.Services
                     {
                         UserId = user.UserId,
                         FirstName = firstName,
-                        LastName = lastName
+                        LastName = lastName,
+                        ProfilePhotoUrl = googleResult.Picture
                     };
 
                     _context.Customers.Add(customer);
@@ -275,6 +278,13 @@ namespace Backend.Services
                 throw new UnauthorizedAccessException("Customer profile not found.");
             }
 
+            // Sync Google profile picture if customer doesn't have one set yet
+            if (string.IsNullOrWhiteSpace(customerRecord.ProfilePhotoUrl) && !string.IsNullOrWhiteSpace(googleResult.Picture))
+            {
+                customerRecord.ProfilePhotoUrl = googleResult.Picture;
+                await _context.SaveChangesAsync();
+            }
+
             var token = GenerateJwtToken(user!, "Customer");
 
             return new CustomerAuthResponseDto
@@ -283,7 +293,8 @@ namespace Backend.Services
                 CustomerId = customerRecord.CustomerId,
                 Role = "Customer",
                 FullName = user!.FullName,
-                Email = user.Email
+                Email = user.Email,
+                ProfilePhotoUrl = customerRecord.ProfilePhotoUrl
             };
         }
 

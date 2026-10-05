@@ -77,6 +77,7 @@ namespace Backend.Controllers
                     .Include(vs => vs.Vendor)
                     .Include(vs => vs.Category)
                     .Include(vs => vs.Images)
+                    .Where(vs => vs.Status == "Active" && vs.Vendor != null && vs.Vendor.IsApproved == true)
                     .AsQueryable();
 
                 // Optional category filter

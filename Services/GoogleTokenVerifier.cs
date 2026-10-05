@@ -58,7 +58,8 @@ namespace Backend.Services
             return new GoogleTokenResult(
                 Sub: payload.Subject,
                 Email: payload.Email,
-                FullName: payload.Name ?? payload.Email
+                FullName: payload.Name ?? payload.Email,
+                Picture: payload.Picture
             );
         }
     }

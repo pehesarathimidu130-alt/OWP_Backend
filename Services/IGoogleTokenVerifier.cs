@@ -17,5 +17,5 @@ namespace Backend.Services
         Task<GoogleTokenResult> VerifyAsync(string idToken);
     }
 
-    public record GoogleTokenResult(string Sub, string Email, string FullName);
+    public record GoogleTokenResult(string Sub, string Email, string FullName, string? Picture = null);
 }

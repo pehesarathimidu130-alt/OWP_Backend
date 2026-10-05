@@ -4,6 +4,7 @@ using Backend.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Backend.Services;
 
 namespace Backend.Controllers
 {
@@ -18,11 +19,13 @@ namespace Backend.Controllers
     public class ListingReviewController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IActivityLogService _activityLogService;
         private readonly ILogger<ListingReviewController> _logger;
 
-        public ListingReviewController(AppDbContext context, ILogger<ListingReviewController> logger)
+        public ListingReviewController(AppDbContext context, IActivityLogService activityLogService, ILogger<ListingReviewController> logger)
         {
             _context = context;
+            _activityLogService = activityLogService;
             _logger = logger;
         }
 
@@ -199,6 +202,13 @@ namespace Backend.Controllers
 
                 await _context.SaveChangesAsync();
 
+                await _activityLogService.LogAsync(
+                    "ListingApproved",
+                    "VendorService",
+                    id.ToString(),
+                    $"Listing '{vs.ServiceName}' was approved."
+                );
+
                 _logger.LogInformation("Listing {Id} approved.", id);
                 return Ok(new { message = "Listing approved successfully.", listingId = id, status = "Active" });
             }
@@ -234,6 +244,13 @@ namespace Backend.Controllers
                     vs.Vendor.Status = "Rejected";
 
                 await _context.SaveChangesAsync();
+
+                await _activityLogService.LogAsync(
+                    "ListingRejected",
+                    "VendorService",
+                    id.ToString(),
+                    $"Listing '{vs.ServiceName}' was rejected. Reason: {dto?.RejectionReason ?? "none"}"
+                );
 
                 _logger.LogInformation("Listing {Id} rejected. Reason: {Reason}", id, dto?.RejectionReason ?? "none");
                 return Ok(new
@@ -271,6 +288,13 @@ namespace Backend.Controllers
                 vs.Status = vs.Status == "Active" ? "Inactive" : "Active";
 
                 await _context.SaveChangesAsync();
+
+                await _activityLogService.LogAsync(
+                    "ListingStatusToggled",
+                    "VendorService",
+                    id.ToString(),
+                    $"Listing '{vs.ServiceName}' status toggled to {vs.Status}."
+                );
 
                 _logger.LogInformation("Listing {Id} toggled to {Status}.", id, vs.Status);
                 return Ok(new { message = $"Listing status set to {vs.Status}.", listingId = id, status = vs.Status });
