@@ -213,104 +213,108 @@ namespace Backend.Services
                 ?? throw new InvalidOperationException("Vendor role not found in the database.");
 
             // ── 5. Atomic transaction: User + Vendor + (UserExternalLogin) + Notification ──
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                // Build password hash: real password for password flow, random bytes for Google flow
-                string passwordHash;
-                if (isGoogleFlow)
-                {
-                    var randomBytes = RandomNumberGenerator.GetBytes(32);
-                    passwordHash = BCrypt.Net.BCrypt.HashPassword(Convert.ToBase64String(randomBytes));
-                }
-                else
-                {
-                    passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-                }
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                // Create User
-                var user = new User
+                try
                 {
-                    RoleId = vendorRole.RoleId,
-                    FullName = fullName,
-                    Email = email,
-                    PasswordHash = passwordHash,
-                    PhoneNumber = phoneNumber,
-                    IsActive = true
-                };
+                    // Build password hash: real password for password flow, random bytes for Google flow
+                    string passwordHash;
+                    if (isGoogleFlow)
+                    {
+                        var randomBytes = RandomNumberGenerator.GetBytes(32);
+                        passwordHash = BCrypt.Net.BCrypt.HashPassword(Convert.ToBase64String(randomBytes));
+                    }
+                    else
+                    {
+                        passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                    }
 
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
+                    // Create User
+                    var user = new User
+                    {
+                        RoleId = vendorRole.RoleId,
+                        FullName = fullName,
+                        Email = email,
+                        PasswordHash = passwordHash,
+                        PhoneNumber = phoneNumber,
+                        IsActive = true
+                    };
 
-                // Create UserExternalLogin for Google flow
-                if (isGoogleFlow)
-                {
-                    _context.UserExternalLogins.Add(new UserExternalLogin
+                    _context.Users.Add(user);
+                    await _context.SaveChangesAsync();
+
+                    // Create UserExternalLogin for Google flow
+                    if (isGoogleFlow)
+                    {
+                        _context.UserExternalLogins.Add(new UserExternalLogin
+                        {
+                            UserId = user.UserId,
+                            Provider = "Google",
+                            ProviderSubject = googleResult!.Sub
+                        });
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // Create Vendor
+                    var vendor = new Vendor
                     {
                         UserId = user.UserId,
-                        Provider = "Google",
-                        ProviderSubject = googleResult!.Sub
-                    });
+                        OwnerName = fullName,
+                        BusinessName = businessName,
+                        BusinessType = businessType,
+                        Category = category,
+                        Tagline = string.IsNullOrWhiteSpace(tagline) ? null : tagline,
+                        Description = description,
+                        YearsInBusiness = request.YearsInBusiness,
+                        BusinessRegistrationNumber = string.IsNullOrWhiteSpace(businessRegNumber) ? null : businessRegNumber,
+                        Email = businessEmail,
+                        ContactNumber = contactNumber,
+                        AltPhoneNumber = altPhoneNumber,
+                        WebsiteUrl = string.IsNullOrWhiteSpace(websiteUrl) ? null : websiteUrl,
+                        Address = address,
+                        City = city,
+                        State = district,
+                        PostalCode = string.IsNullOrWhiteSpace(postalCode) ? null : postalCode,
+                        Country = "Sri Lanka",
+                        ServiceAreas = string.Join(", ", serviceAreas),
+                        TermsAcceptedAt = DateTime.UtcNow,
+                        IsApproved = false,
+                        Status = "Pending",
+                        VerificationStatus = "Pending"
+                    };
+
+                    _context.Vendors.Add(vendor);
                     await _context.SaveChangesAsync();
+
+                    // Notify all admins
+                    await _notificationService.CreateForAllAdminsAsync(
+                        NotificationTypes.VendorRegistered,
+                        "New vendor registration",
+                        $"{businessName} has registered as a new vendor. Please review and verify their identity and account.");
+
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation(
+                        "Vendor registered successfully ({Flow}): UserId={UserId}, BusinessName={BusinessName}",
+                        isGoogleFlow ? "Google" : "Password", user.UserId, businessName);
+
+                    // ── 6. Build login response ──
+                    return _authService.BuildVendorLoginResponse(user);
                 }
-
-                // Create Vendor
-                var vendor = new Vendor
+                catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
                 {
-                    UserId = user.UserId,
-                    OwnerName = fullName,
-                    BusinessName = businessName,
-                    BusinessType = businessType,
-                    Category = category,
-                    Tagline = string.IsNullOrWhiteSpace(tagline) ? null : tagline,
-                    Description = description,
-                    YearsInBusiness = request.YearsInBusiness,
-                    BusinessRegistrationNumber = string.IsNullOrWhiteSpace(businessRegNumber) ? null : businessRegNumber,
-                    Email = businessEmail,
-                    ContactNumber = contactNumber,
-                    AltPhoneNumber = altPhoneNumber,
-                    WebsiteUrl = string.IsNullOrWhiteSpace(websiteUrl) ? null : websiteUrl,
-                    Address = address,
-                    City = city,
-                    State = district,
-                    PostalCode = string.IsNullOrWhiteSpace(postalCode) ? null : postalCode,
-                    Country = "Sri Lanka",
-                    ServiceAreas = string.Join(", ", serviceAreas),
-                    TermsAcceptedAt = DateTime.UtcNow,
-                    IsApproved = false,
-                    Status = "Pending",
-                    VerificationStatus = "Pending"
-                };
-
-                _context.Vendors.Add(vendor);
-                await _context.SaveChangesAsync();
-
-                // Notify all admins
-                await _notificationService.CreateForAllAdminsAsync(
-                    NotificationTypes.VendorRegistered,
-                    "New vendor registration",
-                    $"{businessName} has registered as a new vendor. Please review and verify their identity and account.");
-
-                await transaction.CommitAsync();
-
-                _logger.LogInformation(
-                    "Vendor registered successfully ({Flow}): UserId={UserId}, BusinessName={BusinessName}",
-                    isGoogleFlow ? "Google" : "Password", user.UserId, businessName);
-
-                // ── 6. Build login response ──
-                return _authService.BuildVendorLoginResponse(user);
-            }
-            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
-            {
-                await transaction.RollbackAsync();
-                throw new DuplicateEmailException(email);
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await transaction.RollbackAsync();
+                    throw new DuplicateEmailException(email);
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         // ── Helpers ──
