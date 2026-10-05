@@ -1,0 +1,30 @@
+name: Oleena Backend CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build and Verify Backend
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore backend/Oleena.sln
+
+    - name: Build Backend
+      run: dotnet build backend/Oleena.sln --no-restore --configuration Release
+
+    - name: Run Backend Tests
+      run: dotnet test backend/Oleena.sln --no-build --configuration Release --verbosity normal
