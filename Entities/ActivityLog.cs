@@ -23,6 +23,13 @@ namespace Backend.Entities
         [MaxLength(100)]
         public string TargetEntityType { get; set; } = string.Empty; // "Admin", "Vendor", "Customer", "Auth"
 
+        [NotMapped]
+        public string EntityName
+        {
+            get => TargetEntityType;
+            set => TargetEntityType = value;
+        }
+
         [MaxLength(100)]
         public string? TargetEntityId { get; set; }
 

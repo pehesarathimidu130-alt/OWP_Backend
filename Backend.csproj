@@ -29,4 +29,11 @@
     <Folder Include="Controllers\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Backend.Tests\**" />
+    <Content Remove="Backend.Tests\**" />
+    <EmbeddedResource Remove="Backend.Tests\**" />
+    <None Remove="Backend.Tests\**" />
+  </ItemGroup>
+
 </Project>
