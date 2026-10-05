@@ -326,7 +326,7 @@ namespace Backend.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public async Task<bool> ForgotPasswordAsync(CustomerForgotPasswordRequestDto request)
+        public async Task<string?> ForgotPasswordAsync(CustomerForgotPasswordRequestDto request)
         {
             var email = request.Email.Trim().ToLower();
 
@@ -347,7 +347,12 @@ namespace Backend.Services
             // Send via EmailService
             await _emailService.SendPasswordResetEmailAsync(user.Email, code);
 
-            return true;
+            // If SMTP credentials are not yet configured, return code as debugCode for local development/testing
+            var smtpUser = _configuration["SmtpSettings:Username"];
+            var smtpPass = _configuration["SmtpSettings:Password"];
+            var isSmtpConfigured = !string.IsNullOrWhiteSpace(smtpUser) && !string.IsNullOrWhiteSpace(smtpPass);
+
+            return isSmtpConfigured ? null : code;
         }
 
         public async Task<bool> ResetPasswordAsync(CustomerResetPasswordRequestDto request)

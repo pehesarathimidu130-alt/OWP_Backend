@@ -179,8 +179,14 @@ namespace Backend.Controllers
 
             try
             {
-                await _customerAuthService.ForgotPasswordAsync(request);
-                return Ok(new { message = "Verification code has been sent to your email." });
+                var debugCode = await _customerAuthService.ForgotPasswordAsync(request);
+                return Ok(new
+                {
+                    message = debugCode == null
+                        ? "Verification code has been sent to your email."
+                        : "Verification code generated. (SMTP credentials not configured; verification code logged to server console).",
+                    debugCode = debugCode
+                });
             }
             catch (InvalidOperationException ex)
             {

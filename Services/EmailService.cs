@@ -19,10 +19,10 @@ namespace Backend.Services
             var host = _configuration["SmtpSettings:Host"] ?? "smtp.gmail.com";
             var portStr = _configuration["SmtpSettings:Port"] ?? "587";
             var enableSsl = bool.Parse(_configuration["SmtpSettings:EnableSsl"] ?? "true");
-            var senderEmail = _configuration["SmtpSettings:SenderEmail"] ?? "";
+            var senderEmail = (_configuration["SmtpSettings:SenderEmail"] ?? "").Trim();
             var senderName = _configuration["SmtpSettings:SenderName"] ?? "Oleena Wedding Planner";
-            var username = _configuration["SmtpSettings:Username"] ?? "";
-            var password = _configuration["SmtpSettings:Password"] ?? "";
+            var username = (_configuration["SmtpSettings:Username"] ?? "").Trim();
+            var password = (_configuration["SmtpSettings:Password"] ?? "").Trim().Replace(" ", "");
 
             int.TryParse(portStr, out int port);
             if (port <= 0) port = 587;
