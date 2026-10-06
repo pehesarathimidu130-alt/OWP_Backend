@@ -180,7 +180,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Oleena Wedding API v1");
-    c.RoutePrefix = "swagger"; // Keeps it at /swagger/index.html
+    c.RoutePrefix = "swagger"; // Serves Swagger UI at /swagger/index.html
 });
 
 app.UseCors("AllowReactApp");
@@ -195,6 +195,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 // Seed/repair initial authentication data in background without blocking server startup
 _ = Task.Run(async () =>
