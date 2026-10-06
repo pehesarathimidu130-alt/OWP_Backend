@@ -45,6 +45,7 @@ namespace Backend.Data
         public DbSet<VendorInquiry> VendorInquiries { get; set; } = null!;
         public DbSet<VendorRating> VendorRatings { get; set; } = null!;
         public DbSet<ActivityLog> ActivityLogs { get; set; } = null!;
+        public DbSet<FlaggedItem> FlaggedItems { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -178,6 +179,34 @@ namespace Backend.Data
                 .WithOne(d => d.VendorService)
                 .HasForeignKey<PhotographyDetails>(d => d.ServiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ── FlaggedItems Relationships ─────────────────────────────────────
+            modelBuilder.Entity<FlaggedItem>(entity =>
+            {
+                // Listing FK → VendorService.ServiceId
+                entity.HasOne(f => f.Listing)
+                      .WithMany()
+                      .HasForeignKey(f => f.ListingId)
+                      .HasPrincipalKey(vs => vs.ServiceId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Reporter FK → User.UserId
+                entity.HasOne(f => f.Reporter)
+                      .WithMany()
+                      .HasForeignKey(f => f.ReporterUserId)
+                      .HasPrincipalKey(u => u.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Vendor FK → Vendor.VendorId
+                entity.HasOne(f => f.Vendor)
+                      .WithMany()
+                      .HasForeignKey(f => f.VendorId)
+                      .HasPrincipalKey(v => v.VendorId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Unique index: one flag per user per listing
+                entity.HasIndex(f => new { f.ListingId, f.ReporterUserId }).IsUnique();
+            });
         }
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
