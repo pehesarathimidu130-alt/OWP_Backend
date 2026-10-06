@@ -165,6 +165,8 @@ namespace Backend.Controllers
                     message = i.Message,
                     attachmentUrl = i.AttachmentUrl,
                     status = i.Status,
+                    vendorReply = i.VendorReply,
+                    repliedAt = i.RepliedAt,
                     createdAt = i.CreatedAt
                 })
                 .ToListAsync();
@@ -208,6 +210,176 @@ namespace Backend.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { success = true, message = "Inquiry updated successfully." });
+        }
+
+        private async Task<int?> GetCurrentVendorIdAsync()
+        {
+            var vendorClaim = User.FindFirst("vendorId")?.Value
+                ?? User.FindFirst("VendorId")?.Value
+                ?? User.FindFirst("vendor_id")?.Value;
+
+            if (int.TryParse(vendorClaim, out var vId) && vId > 0)
+            {
+                return vId;
+            }
+
+            var userId = GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == userId.Value);
+                if (vendor != null) return vendor.VendorId;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// GET /api/inquiries/vendor/my-inquiries
+        /// Returns all customer inquiries submitted to the authenticated vendor.
+        /// </summary>
+        [HttpGet("vendor/my-inquiries")]
+        [HttpGet("vendor")]
+        [Authorize(Roles = "Vendor,Admin,SuperAdmin")]
+        public async Task<IActionResult> GetVendorInquiries()
+        {
+            var callerVendorId = await GetCurrentVendorIdAsync();
+            bool isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+
+            if (!callerVendorId.HasValue && !isAdmin)
+            {
+                return Unauthorized(new { message = "Vendor profile not found for this account." });
+            }
+
+            var query = _context.VendorInquiries
+                .Include(i => i.Customer)
+                .Include(i => i.User)
+                .Include(i => i.Vendor)
+                .Include(i => i.VendorService!)
+                    .ThenInclude(s => s.Category)
+                .AsQueryable();
+
+            if (callerVendorId.HasValue)
+            {
+                query = query.Where(i => i.VendorId == callerVendorId.Value);
+            }
+
+            var inquiries = await query
+                .OrderByDescending(i => i.CreatedAt)
+                .Select(i => new Backend.DTOs.VendorInquiryResponseDto
+                {
+                    InquiryId = i.InquiryId,
+                    VendorId = i.VendorId,
+                    VendorName = i.Vendor != null ? i.Vendor.BusinessName : "Wedding Vendor",
+                    ServiceId = i.ServiceId,
+                    ServiceName = i.VendorService != null ? i.VendorService.ServiceName : "General Vendor Inquiry",
+                    ServiceImage = i.VendorService != null ? i.VendorService.CoverImageUrl : null,
+                    CategoryName = i.VendorService != null && i.VendorService.Category != null
+                        ? i.VendorService.Category.CategoryName
+                        : (i.Vendor != null ? i.Vendor.Category : null),
+                    CustomerId = i.CustomerId,
+                    UserId = i.UserId,
+                    CustomerName = i.Customer != null
+                        ? ($"{i.Customer.FirstName} {i.Customer.LastName}").Trim()
+                        : (i.User != null ? i.User.FullName : "Prospective Client"),
+                    CustomerEmail = i.User != null ? i.User.Email : (i.Customer != null && i.Customer.User != null ? i.Customer.User.Email : ""),
+                    CustomerPhone = i.User != null && !string.IsNullOrEmpty(i.User.PhoneNumber)
+                        ? i.User.PhoneNumber
+                        : (i.Customer != null && i.Customer.User != null ? i.Customer.User.PhoneNumber ?? "" : ""),
+                    CustomerAvatar = i.Customer != null ? i.Customer.ProfilePhotoUrl : null,
+                    WeddingDate = i.WeddingDate,
+                    GuestCount = i.GuestCount,
+                    Budget = i.Budget,
+                    Message = i.Message,
+                    AttachmentUrl = i.AttachmentUrl,
+                    Status = i.Status,
+                    VendorReply = i.VendorReply,
+                    RepliedAt = i.RepliedAt,
+                    CreatedAt = i.CreatedAt,
+                    UpdatedAt = i.UpdatedAt
+                })
+                .ToListAsync();
+
+            return Ok(inquiries);
+        }
+
+        /// <summary>
+        /// PATCH /api/inquiries/{id}/reply or POST /api/inquiries/{id}/reply
+        /// Allows the authenticated vendor to reply to a customer inquiry and marks status as 'Replied'.
+        /// </summary>
+        [HttpPatch("{id:int}/reply")]
+        [HttpPost("{id:int}/reply")]
+        [Authorize(Roles = "Vendor,Admin,SuperAdmin")]
+        public async Task<IActionResult> ReplyToInquiry(int id, [FromBody] Backend.DTOs.ReplyInquiryRequestDto request)
+        {
+            if (request == null)
+            {
+                return BadRequest(new { message = "Reply payload is required." });
+            }
+
+            var replyText = request.GetEffectiveMessage();
+            if (string.IsNullOrWhiteSpace(replyText))
+            {
+                return BadRequest(new { message = "Reply message cannot be empty." });
+            }
+
+            var inquiry = await _context.VendorInquiries
+                .Include(i => i.Vendor)
+                .Include(i => i.Customer)
+                .Include(i => i.User)
+                .FirstOrDefaultAsync(i => i.InquiryId == id);
+
+            if (inquiry == null)
+            {
+                return NotFound(new { message = $"Inquiry with ID {id} was not found." });
+            }
+
+            var callerVendorId = await GetCurrentVendorIdAsync();
+            bool isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+
+            if (!isAdmin && (!callerVendorId.HasValue || inquiry.VendorId != callerVendorId.Value))
+            {
+                return Forbid();
+            }
+
+            inquiry.VendorReply = replyText;
+            inquiry.RepliedAt = DateTime.UtcNow;
+            inquiry.Status = "Replied";
+            inquiry.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Trigger in-app notification to the customer
+            if (inquiry.UserId.HasValue)
+            {
+                try
+                {
+                    var vendorName = inquiry.Vendor?.BusinessName ?? "Vendor";
+                    var snippet = replyText.Length > 80 ? replyText.Substring(0, 77) + "..." : replyText;
+                    _context.Notifications.Add(new Notification
+                    {
+                        UserId = inquiry.UserId.Value,
+                        Title = "New Reply to Your Inquiry",
+                        Message = $"{vendorName} replied: \"{snippet}\"",
+                        Type = Backend.Constants.NotificationTypes.InquiryStatusChanged,
+                        IsRead = false
+                    });
+                    await _context.SaveChangesAsync();
+                }
+                catch (Exception notifEx)
+                {
+                    Console.WriteLine($"Error sending inquiry reply notification: {notifEx.Message}");
+                }
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Reply sent successfully.",
+                inquiryId = inquiry.InquiryId,
+                status = inquiry.Status,
+                vendorReply = inquiry.VendorReply,
+                repliedAt = inquiry.RepliedAt
+            });
         }
 
         /// <summary>
