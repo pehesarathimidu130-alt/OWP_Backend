@@ -47,15 +47,33 @@ namespace Backend.Controllers
             if (existing != null)
                 return Conflict(new { message = "You have already reported this listing." });
 
-            // Resolve the listing title if not provided
+            // Resolve the listing title and vendor ID if not provided
             string contentTitle = dto.ContentTitle;
-            if (string.IsNullOrWhiteSpace(contentTitle))
+            int resolvedVendorId = dto.VendorId;
+
+            if (dto.ListingId > 0)
             {
                 var listing = await _context.VendorServices
                     .Where(vs => vs.ServiceId == dto.ListingId)
-                    .Select(vs => vs.ServiceName)
+                    .Select(vs => new { vs.ServiceName, vs.VendorId })
                     .FirstOrDefaultAsync();
-                contentTitle = listing ?? "Unknown Listing";
+                if (listing != null)
+                {
+                    if (string.IsNullOrWhiteSpace(contentTitle))
+                        contentTitle = listing.ServiceName;
+                    if (resolvedVendorId <= 0)
+                        resolvedVendorId = listing.VendorId;
+                }
+                else if (string.IsNullOrWhiteSpace(contentTitle))
+                {
+                    contentTitle = "Unknown Listing";
+                }
+            }
+
+            var vendorRecord = await _context.Vendors.FirstOrDefaultAsync(v => v.VendorId == resolvedVendorId || v.UserId == resolvedVendorId);
+            if (vendorRecord != null)
+            {
+                resolvedVendorId = vendorRecord.VendorId;
             }
 
             // Derive severity from reason if not set explicitly
@@ -77,7 +95,7 @@ namespace Backend.Controllers
             {
                 ListingId = dto.ListingId,
                 ReporterUserId = dto.ReporterUserId,
-                VendorId = dto.VendorId,
+                VendorId = resolvedVendorId,
                 ContentType = dto.ContentType,
                 ContentTitle = contentTitle,
                 Reason = dto.Reason,
@@ -160,14 +178,22 @@ namespace Backend.Controllers
         // ──────────────────────────────────────────────────────────────────────────
         /// <summary>
         /// Returns all flags targeting the given vendor's listings.
+        /// Resolves whether the provided ID is a VendorId or UserId.
         /// Consumed by the Vendor Dashboard to show customer complaints.
         /// </summary>
         [HttpGet("vendor/{vendorId:int}")]
         public async Task<ActionResult<List<FlaggedItemDto>>> GetForVendor(int vendorId)
         {
+            int resolvedVendorId = vendorId;
+            var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.VendorId == vendorId || v.UserId == vendorId);
+            if (vendor != null)
+            {
+                resolvedVendorId = vendor.VendorId;
+            }
+
             var flags = await _context.FlaggedItems
                 .Include(f => f.Reporter)
-                .Where(f => f.VendorId == vendorId)
+                .Where(f => f.VendorId == resolvedVendorId)
                 .OrderByDescending(f => f.CreatedAt)
                 .ToListAsync();
 
@@ -186,12 +212,39 @@ namespace Backend.Controllers
                 ResolutionNote = f.ResolutionNote,
                 ReporterName = f.Reporter?.FullName ?? "Anonymous",
                 ReporterEmail = f.Reporter?.Email ?? string.Empty,
-                VendorName = string.Empty,
+                VendorName = vendor?.BusinessName ?? string.Empty,
                 CreatedAt = f.CreatedAt,
                 ReviewedAt = f.ReviewedAt
             }).ToList();
 
             return Ok(result);
+        }
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // GET /api/flags/vendor/my-flags
+        // ──────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Resolves flags for the currently authenticated vendor via JWT token claims.
+        /// </summary>
+        [HttpGet("vendor/my-flags")]
+        public async Task<ActionResult<List<FlaggedItemDto>>> GetMyFlags()
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("nameid")?.Value
+                ?? User.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            {
+                return Unauthorized(new { message = "User identity could not be verified." });
+            }
+
+            var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == userId || v.VendorId == userId);
+            if (vendor == null)
+            {
+                return Ok(new List<FlaggedItemDto>());
+            }
+
+            return await GetForVendor(vendor.VendorId);
         }
 
         // ──────────────────────────────────────────────────────────────────────────
