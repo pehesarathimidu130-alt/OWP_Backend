@@ -73,6 +73,7 @@ namespace Backend.Services
 
             // ── 5. Admin-specific validation ──
             Entities.Admin? admin = null;
+            Entities.Vendor? vendor = null;
             if (request.IsAdmin)
             {
                 // The user must actually have an Admin role
@@ -122,6 +123,8 @@ namespace Backend.Services
                     _logger.LogWarning("Login failed: user {UserId} attempted vendor login but role is {Role}", user.UserId, roleName);
                     throw new UnauthorizedAccessException("Invalid credentials for vendor login.");
                 }
+
+                vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == user.UserId);
             }
 
             // ── 6. Normalize role name → consistent casing for JWT claims ──
@@ -137,7 +140,7 @@ namespace Backend.Services
             };
 
             // ── 7. Generate JWT token ──
-            var token = GenerateJwtToken(user, normalizedRole);
+            var token = GenerateJwtToken(user, normalizedRole, vendor?.VendorId);
 
             if (request.IsAdmin && admin != null)
             {
@@ -159,6 +162,7 @@ namespace Backend.Services
                 FullName = user.FullName,
                 Email = user.Email,
                 UserId = user.UserId,
+                VendorId = vendor?.VendorId,
                 ProfilePictureUrl = admin?.ProfilePictureUrl
             };
         }
@@ -184,18 +188,20 @@ namespace Backend.Services
 
         public LoginResponseDto BuildVendorLoginResponse(User user)
         {
-            var token = GenerateJwtToken(user, "Vendor");
+            var vendor = _context.Vendors.FirstOrDefault(v => v.UserId == user.UserId);
+            var token = GenerateJwtToken(user, "Vendor", vendor?.VendorId);
             return new LoginResponseDto
             {
                 Token = token,
                 Role = "Vendor",
                 FullName = user.FullName,
                 Email = user.Email,
-                UserId = user.UserId
+                UserId = user.UserId,
+                VendorId = vendor?.VendorId
             };
         }
 
-        private string GenerateJwtToken(User user, string roleName)
+        private string GenerateJwtToken(User user, string roleName, int? vendorId = null)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings.GetValue<string>("SecretKey")
@@ -211,6 +217,11 @@ namespace Backend.Services
                 new Claim(ClaimTypes.Name, user.FullName),
                 new Claim(ClaimTypes.Role, roleName)
             };
+
+            if (vendorId.HasValue)
+            {
+                claims.Add(new Claim("vendorId", vendorId.Value.ToString()));
+            }
 
             var token = new JwtSecurityToken(
                 issuer: jwtSettings.GetValue<string>("Issuer"),
