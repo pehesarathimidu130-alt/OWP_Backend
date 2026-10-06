@@ -1,8 +1,11 @@
+using Backend.Constants;
 using Backend.Data;
 using Backend.DTOs;
 using Backend.Entities;
+using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace Backend.Controllers
 {
@@ -10,10 +13,11 @@ namespace Backend.Controllers
     /// Manages the Flag/Report Listing feature across mobile and web dashboards.
     ///
     /// Endpoints:
-    ///   POST   /api/flags              – Customer submits a new flag (mobile)
+    ///   POST   POST /api/flags         – Customer submits a new flag (mobile)
     ///   GET    /api/flags/check        – Checks if a user already flagged a listing (mobile)
     ///   GET    /api/flags/admin        – Admin view: all flags with reporter/vendor details
     ///   GET    /api/flags/vendor/{id}  – Vendor view: flags against that vendor's listings
+    ///   GET    /api/flags/vendor/my-flags – Authenticated vendor view
     ///   PATCH  /api/flags/{id}/status  – Admin updates flag status (dismiss / remove / review)
     /// </summary>
     [ApiController]
@@ -21,10 +25,12 @@ namespace Backend.Controllers
     public class FlagsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public FlagsController(AppDbContext context)
+        public FlagsController(AppDbContext context, INotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -107,6 +113,36 @@ namespace Backend.Controllers
             _context.FlaggedItems.Add(flag);
             await _context.SaveChangesAsync();
 
+            // ── Send Notification to Vendor & Admins ──
+            if (vendorRecord != null)
+            {
+                string vendorMessage = $"Your listing '{contentTitle}' was reported for: {dto.Reason}." +
+                    (string.IsNullOrWhiteSpace(dto.Comments) ? "" : $" Customer message: \"{dto.Comments}\"");
+
+                _context.Notifications.Add(new Entities.Notification
+                {
+                    UserId = vendorRecord.UserId,
+                    Type = NotificationTypes.ListingFlagged,
+                    Title = "Listing Reported",
+                    Message = vendorMessage,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            try
+            {
+                await _notificationService.CreateForAllAdminsAsync(
+                    NotificationTypes.ListingFlagged,
+                    "Listing Flagged",
+                    $"Listing '{contentTitle}' was flagged for: {dto.Reason}.");
+            }
+            catch
+            {
+                // Non-blocking if admin notification dispatch encounters preference edge case
+            }
+
             return Created($"/api/flags/{flag.Id}", new { flag.Id, flag.Status });
         }
 
@@ -174,6 +210,45 @@ namespace Backend.Controllers
         }
 
         // ──────────────────────────────────────────────────────────────────────────
+        // Vendor resolution helper
+        // ──────────────────────────────────────────────────────────────────────────
+        private async Task<Vendor?> ResolveVendorAsync(int? vendorOrUserId)
+        {
+            // 1. Try resolving from authenticated JWT claims first if caller is logged in
+            var vendorIdClaim = User.FindFirst("vendorId")?.Value
+                ?? User.FindFirst("VendorId")?.Value;
+            if (int.TryParse(vendorIdClaim, out var claimVendorId) && claimVendorId > 0)
+            {
+                var v = await _context.Vendors.FirstOrDefaultAsync(v => v.VendorId == claimVendorId);
+                if (v != null) return v;
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst("userId")?.Value;
+            if (int.TryParse(userIdClaim, out var claimUserId) && claimUserId > 0)
+            {
+                var v = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == claimUserId);
+                if (v != null) return v;
+            }
+
+            // 2. If vendorOrUserId parameter is provided:
+            if (vendorOrUserId.HasValue && vendorOrUserId.Value > 0)
+            {
+                int id = vendorOrUserId.Value;
+                // Check if id matches UserId first (since the frontend frequently passes userId)
+                var vByUser = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == id);
+                if (vByUser != null) return vByUser;
+
+                // Otherwise check VendorId
+                var vByVendor = await _context.Vendors.FirstOrDefaultAsync(v => v.VendorId == id);
+                if (vByVendor != null) return vByVendor;
+            }
+
+            return null;
+        }
+
+        // ──────────────────────────────────────────────────────────────────────────
         // GET /api/flags/vendor/{vendorId}
         // ──────────────────────────────────────────────────────────────────────────
         /// <summary>
@@ -184,12 +259,8 @@ namespace Backend.Controllers
         [HttpGet("vendor/{vendorId:int}")]
         public async Task<ActionResult<List<FlaggedItemDto>>> GetForVendor(int vendorId)
         {
-            int resolvedVendorId = vendorId;
-            var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.VendorId == vendorId || v.UserId == vendorId);
-            if (vendor != null)
-            {
-                resolvedVendorId = vendor.VendorId;
-            }
+            var vendor = await ResolveVendorAsync(vendorId);
+            int resolvedVendorId = vendor?.VendorId ?? vendorId;
 
             var flags = await _context.FlaggedItems
                 .Include(f => f.Reporter)
@@ -229,16 +300,7 @@ namespace Backend.Controllers
         [HttpGet("vendor/my-flags")]
         public async Task<ActionResult<List<FlaggedItemDto>>> GetMyFlags()
         {
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst("nameid")?.Value
-                ?? User.FindFirst("sub")?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
-            {
-                return Unauthorized(new { message = "User identity could not be verified." });
-            }
-
-            var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == userId || v.VendorId == userId);
+            var vendor = await ResolveVendorAsync(null);
             if (vendor == null)
             {
                 return Ok(new List<FlaggedItemDto>());
