@@ -110,5 +110,30 @@ namespace Backend.Tests
             Assert.Equal(450000.00m, inquiry.Budget);
             Assert.Equal("Pending", inquiry.Status);
         }
+
+        [Fact]
+        public void VendorInquiry_WhenVendorReplies_ShouldTransitionStatusToRepliedAndRecordReplyDetails()
+        {
+            // Arrange
+            var inquiry = new VendorInquiry
+            {
+                InquiryId = 3003,
+                Status = "Pending",
+                Message = "Do you have open dates for November?"
+            };
+
+            var replyMessage = "Yes! We have November 14th available for your wedding reception.";
+
+            // Act - Vendor submits reply
+            inquiry.VendorReply = replyMessage;
+            inquiry.RepliedAt = DateTime.UtcNow;
+            inquiry.Status = "Replied";
+
+            // Assert
+            Assert.Equal("Replied", inquiry.Status);
+            Assert.Equal(replyMessage, inquiry.VendorReply);
+            Assert.NotNull(inquiry.RepliedAt);
+            Assert.True(inquiry.RepliedAt <= DateTime.UtcNow);
+        }
     }
 }

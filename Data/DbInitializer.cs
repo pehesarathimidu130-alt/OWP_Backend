@@ -36,9 +36,14 @@ namespace Backend.Data
                             ""Message"" TEXT NULL,
                             ""AttachmentUrl"" VARCHAR(500) NULL,
                             ""Status"" VARCHAR(50) NOT NULL DEFAULT 'Pending',
+                            ""VendorReply"" TEXT NULL,
+                            ""RepliedAt"" TIMESTAMP WITH TIME ZONE NULL,
                             ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
                         );
+
+                        ALTER TABLE ""VendorInquiries"" ADD COLUMN IF NOT EXISTS ""VendorReply"" TEXT NULL;
+                        ALTER TABLE ""VendorInquiries"" ADD COLUMN IF NOT EXISTS ""RepliedAt"" TIMESTAMP WITH TIME ZONE NULL;
                     ");
                 }
                 catch (Exception tblEx)
