@@ -176,11 +176,12 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Oleena Wedding API v1");
+    c.RoutePrefix = "swagger"; // Keeps it at /swagger/index.html
+});
 
 app.UseCors("AllowReactApp");
 
