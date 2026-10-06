@@ -164,6 +164,7 @@ builder.Services.AddCors(options =>
                 "http://127.0.0.1:5174",
                 "http://localhost:5175",
                 "http://127.0.0.1:5175",
+                "https://owp-wedding-planner.netlify.app/",
                 "http://localhost:3000")
               .SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
