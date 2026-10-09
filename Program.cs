@@ -15,6 +15,13 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
+// When deployed on Railway (or other cloud container platforms), bind to the dynamic PORT environment variable.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -164,7 +171,8 @@ builder.Services.AddCors(options =>
                 "http://127.0.0.1:5174",
                 "http://localhost:5175",
                 "http://127.0.0.1:5175",
-                "https://owp-wedding-planner.netlify.app/",
+                "https://owp-wedding-planner.netlify.app",
+                "https://oleena-wedding.netlify.app",
                 "http://localhost:3000")
               .SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
@@ -182,6 +190,12 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Oleena Wedding API v1");
     c.RoutePrefix = "swagger"; // Serves Swagger UI at /swagger/index.html
+});
+
+// Handle reverse proxy headers (e.g. Railway, Nginx, Cloudflare)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
 });
 
 app.UseCors("AllowReactApp");
